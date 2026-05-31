@@ -12,4 +12,4 @@ Winggie Lai (winggielai)
 
 - Links:
   - [Team contract](./docs/contract.md)
-  - [Meeting minutes](To be added...)
+  - [Meeting minutes](./docs/meetings)

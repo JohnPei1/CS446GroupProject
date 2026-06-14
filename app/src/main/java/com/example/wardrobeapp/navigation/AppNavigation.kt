@@ -20,19 +20,39 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         modifier = modifier
     ) {
         composable(Screen.Home.route) {
-            HomeScreen()
+            HomeScreen(
+                onNavigateToWardrobe = { navController.navigate(Screen.Wardrobe.route) },
+                onNavigateToOutfitGenerator = { navController.navigate(Screen.OutfitGenerator.route) },
+                onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+            )
         }
         composable(Screen.Wardrobe.route) {
-            WardrobeScreen()
+            WardrobeScreen(
+                onNavigateToAddItem = { navController.navigate(Screen.AddItem.route) },
+                onNavigateToEditItem = { itemId -> 
+                    navController.navigate(Screen.EditItem.createRoute(itemId)) 
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.AddItem.route) {
+            // Placeholder for AddItemScreen (Hermela's task)
+            androidx.compose.material3.Text("Add Item Screen stub")
+        }
+        composable(Screen.EditItem.route) { backStackEntry ->
+            val itemId = backStackEntry.arguments?.getString("itemId")
+            // Placeholder for EditItemScreen (Hermela's task)
+            androidx.compose.material3.Text("Edit Item Screen stub for ID: $itemId")
         }
         composable(Screen.OutfitGenerator.route) {
-            OutfitGeneratorScreen()
+            OutfitGeneratorScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Calendar.route) {
-            CalendarScreen()
+            CalendarScreen(onBack = { navController.popBackStack() })
         }
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(onBack = { navController.popBackStack() })
         }
     }
 }

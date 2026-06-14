@@ -23,6 +23,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.wardrobeapp.navigation.AppNavigation
 import com.example.wardrobeapp.navigation.Screen
+import com.example.wardrobeapp.theme.WardrobeAppTheme
 
 data class NavItem(
     val screen: Screen,
@@ -32,50 +33,52 @@ data class NavItem(
 
 @Composable
 fun WardrobeApp() {
-    val navController = rememberNavController()
-    
-    val navItems = listOf(
-        NavItem(Screen.Home, "Home", Icons.Default.Home),
-        NavItem(Screen.Wardrobe, "Wardrobe", Icons.Default.Checkroom),
-        NavItem(Screen.OutfitGenerator, "Outfits", Icons.Default.AutoAwesome),
-        NavItem(Screen.Calendar, "Calendar", Icons.Default.CalendarMonth),
-        NavItem(Screen.Settings, "Settings", Icons.Default.Settings)
-    )
+    WardrobeAppTheme {
+        val navController = rememberNavController()
+        
+        val navItems = listOf(
+            NavItem(Screen.Home, "Home", Icons.Default.Home),
+            NavItem(Screen.Wardrobe, "Wardrobe", Icons.Default.Checkroom),
+            NavItem(Screen.OutfitGenerator, "Outfits", Icons.Default.AutoAwesome),
+            NavItem(Screen.Calendar, "Calendar", Icons.Default.CalendarMonth),
+            NavItem(Screen.Settings, "Settings", Icons.Default.Settings)
+        )
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = {
-            NavigationBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
-                
-                navItems.forEach { item ->
-                    NavigationBarItem(
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label) },
-                        // highlight selected icon
-                        selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true,
-                        onClick = {
-                            navController.navigate(item.screen.route) {
-                                // Avoid building up a large stack of destinations
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    // Save scrolling position (state)
-                                    saveState = true
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                NavigationBar {
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentDestination = navBackStackEntry?.destination
+                    
+                    navItems.forEach { item ->
+                        NavigationBarItem(
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label) },
+                            // highlight selected icon
+                            selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true,
+                            onClick = {
+                                navController.navigate(item.screen.route) {
+                                    // Avoid building up a large stack of destinations
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        // Save scrolling position (state)
+                                        saveState = true
+                                    }
+                                    // Avoid opening the same destination twice
+                                    launchSingleTop = true
+                                    // Allow restoring the state (scroll position)
+                                    restoreState = true
                                 }
-                                // Avoid opening the same destination twice
-                                launchSingleTop = true
-                                // Allow restoring the state (scroll position)
-                                restoreState = true
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
+        ) { innerPadding ->
+            AppNavigation(
+                navController = navController,
+                modifier = Modifier.padding(innerPadding)
+            )
         }
-    ) { innerPadding ->
-        AppNavigation(
-            navController = navController,
-            modifier = Modifier.padding(innerPadding)
-        )
     }
 }

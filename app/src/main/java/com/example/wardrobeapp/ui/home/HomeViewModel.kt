@@ -1,6 +1,7 @@
 package com.example.wardrobeapp.ui.home
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.wardrobeapp.data.repository.WeatherRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,5 +28,15 @@ class HomeViewModel(private val weatherRepository: WeatherRepository) : ViewMode
                 _uiState.value = HomeUiState(error = e.message, isLoading = false)
             }
         }
+    }
+}
+
+class HomeViewModelFactory(private val weatherRepository: WeatherRepository) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(HomeViewModel::class.java)) {
+            return HomeViewModel(weatherRepository) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

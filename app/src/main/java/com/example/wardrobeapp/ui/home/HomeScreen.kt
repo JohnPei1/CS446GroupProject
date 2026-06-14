@@ -16,7 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.wardrobeapp.WardrobeApplication
 
 @Composable
 fun HomeScreen(
@@ -24,7 +26,11 @@ fun HomeScreen(
     onNavigateToOutfitGenerator: () -> Unit,
     onNavigateToCalendar: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    viewModel: HomeViewModel = viewModel() // This will need a factory later
+    viewModel: HomeViewModel = viewModel(
+        factory = HomeViewModelFactory(
+            (androidx.compose.ui.platform.LocalContext.current.applicationContext as WardrobeApplication).container.weatherRepository
+        )
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
     

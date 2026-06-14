@@ -17,7 +17,7 @@ fun AppNavigation(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Wardrobe.route,
+        startDestination = Screen.Home.route,
         modifier = modifier
     ) {
         composable(Screen.Home.route) {
@@ -31,19 +31,19 @@ fun AppNavigation(
         composable(Screen.Wardrobe.route) {
             WardrobeScreen(
                 onNavigateToAddItem = { navController.navigate(Screen.AddItem.route) },
-                onNavigateToEditItem = { itemId -> 
+                onNavigateToEditItem = { itemId: String ->
                     navController.navigate(Screen.EditItem.createRoute(itemId)) 
                 },
                 onBack = { navController.popBackStack() }
             )
         }
         composable(Screen.AddItem.route) {
-            // Placeholder for AddItemScreen (Hermela's task)
+            // Placeholder for AddItemScreen
             androidx.compose.material3.Text("Add Item Screen stub")
         }
         composable(Screen.EditItem.route) { backStackEntry ->
             val itemId = backStackEntry.arguments?.getString("itemId")
-            // Placeholder for EditItemScreen (Hermela's task)
+            // Placeholder for EditItemScreen
             androidx.compose.material3.Text("Edit Item Screen stub for ID: $itemId")
         }
         composable(Screen.OutfitGenerator.route) {

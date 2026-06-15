@@ -22,12 +22,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
+import com.example.wardrobeapp.navigation.Screen
+import com.example.wardrobeapp.navigation.AppNavigation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WardrobeScreen() {
+fun WardrobeScreen(
+    onAddItemClick: () -> Unit
+) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     val categories = listOf("All", "Tops", "Bottoms", "Footwear", "Outerwear")
@@ -45,7 +51,7 @@ fun WardrobeScreen() {
     Scaffold(
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { /* TODO: Navigate to Add Screen */ },
+                onClick = onAddItemClick,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },

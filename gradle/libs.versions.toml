@@ -8,6 +8,7 @@ lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.9.3"
 kotlin = "2.2.10"
 composeBom = "2025.12.00"
+navigationFragmentKtx = "2.9.8"
 room = "2.8.4"
 navigation = "2.8.5"
 datastore = "1.1.1"
@@ -19,6 +20,7 @@ lifecycle = "2.8.7"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-navigation-fragment-ktx = { module = "androidx.navigation:navigation-fragment-ktx", version.ref = "navigationFragmentKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

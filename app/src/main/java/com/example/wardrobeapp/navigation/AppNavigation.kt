@@ -9,6 +9,7 @@ import com.example.wardrobeapp.ui.wardrobe.WardrobeScreen
 import com.example.wardrobeapp.ui.outfit.OutfitGeneratorScreen
 import com.example.wardrobeapp.ui.calendar.CalendarScreen
 import com.example.wardrobeapp.ui.settings.SettingsScreen
+import com.example.wardrobeapp.ui.wardrobe.AddItemScreen
 
 @Composable
 fun AppNavigation(
@@ -24,7 +25,11 @@ fun AppNavigation(
             HomeScreen()
         }
         composable(Screen.Wardrobe.route) {
-            WardrobeScreen()
+            WardrobeScreen(
+                onAddItemClick = {
+                    navController.navigate(Screen.AddItem.route)
+                }
+            )
         }
         composable(Screen.OutfitGenerator.route) {
             OutfitGeneratorScreen()
@@ -34,6 +39,9 @@ fun AppNavigation(
         }
         composable(Screen.Settings.route) {
             SettingsScreen()
+        }
+        composable(Screen.AddItem.route){
+            AddItemScreen()
         }
     }
 }

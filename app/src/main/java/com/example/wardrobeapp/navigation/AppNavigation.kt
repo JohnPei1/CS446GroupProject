@@ -41,7 +41,11 @@ fun AppNavigation(
             SettingsScreen()
         }
         composable(Screen.AddItem.route){
-            AddItemScreen()
+            AddItemScreen(
+                onExitClick = {
+                    navController.navigate(Screen.Wardrobe.route)
+                    }
+            )
         }
     }
 }

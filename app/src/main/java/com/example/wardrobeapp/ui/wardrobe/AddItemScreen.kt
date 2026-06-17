@@ -1,12 +1,12 @@
 package com.example.wardrobeapp.ui.wardrobe
 
 import android.net.Uri
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,12 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import coil.compose.AsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddItemScreen(
+    onExitClick: ()->Unit
 ) {
     var itemName by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
@@ -47,6 +47,9 @@ fun AddItemScreen(
             TopAppBar(
                 title = {
                     Text("Add Item")
+                },
+                navigationIcon = {
+                    IconButton(onClick = onExitClick){Icon(imageVector = Icons.Default.Close, contentDescription = null) }
                 }
             )
         }

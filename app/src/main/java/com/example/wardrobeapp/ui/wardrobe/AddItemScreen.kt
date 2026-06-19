@@ -1,5 +1,6 @@
 package com.example.wardrobeapp.ui.wardrobe
 
+import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,13 +15,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import java.io.File
 import coil.compose.AsyncImage
 
+private val CAMERA_REQUEST_CODE = 1
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddItemScreen(
     onExitClick: ()->Unit
 ) {
+
     var itemName by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
@@ -28,8 +37,26 @@ fun AddItemScreen(
 
     var selectedCategory by remember { mutableStateOf("Tops") }
 
+    val context = LocalContext.current
+
     var imageUri by remember {
         mutableStateOf<Uri?>(null)
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (!success) {
+            imageUri = null
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            imageUri = uri
+        }
     }
 
     val categories = listOf(
@@ -63,7 +90,6 @@ fun AddItemScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -92,9 +118,11 @@ fun AddItemScreen(
             ) {
 
                 Button(
-                    onClick = {
-                        // Launch camera
-                    },
+                    onClick = { //take photo
+                        val uri = createImageFile(context)
+                        imageUri = uri
+                        cameraLauncher.launch(uri)
+              },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
@@ -110,6 +138,11 @@ fun AddItemScreen(
                 Button(
                     onClick = {
                         // Launch gallery
+                        galleryLauncher.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
                     },
                     modifier = Modifier.weight(1f)
                 ) {
@@ -206,3 +239,17 @@ fun AddItemScreen(
         }
     }
 }
+
+fun createImageFile(context: Context): Uri {
+    val imageFile = File(
+        context.cacheDir,
+        "camera_photo_${System.currentTimeMillis()}.jpg"
+    )
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.provider",
+        imageFile
+    )
+}
+
+

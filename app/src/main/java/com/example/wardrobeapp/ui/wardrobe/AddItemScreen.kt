@@ -23,11 +23,20 @@ import androidx.core.content.FileProvider
 import java.io.File
 import coil.compose.AsyncImage
 
-private val CAMERA_REQUEST_CODE = 1
+data class ClothingItem(
+    val id: Long,
+    val name: String,
+    val category: String,
+    val brand: String,
+    val color: String,
+    val description: String,
+    val imageUri: String?
+)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddItemScreen(
-    onExitClick: ()->Unit
+    onExitClick: ()->Unit,
+    onSaveItem: (ClothingItem) -> Unit
 ) {
 
     var itemName by remember { mutableStateOf("") }
@@ -231,6 +240,17 @@ fun AddItemScreen(
             Button(
                 onClick = {
                     // Save item to database
+                    val item = ClothingItem(
+                        id = System.currentTimeMillis(),
+                        name = itemName,
+                        category = selectedCategory,
+                        brand = brand,
+                        color = color,
+                        description = description,
+                        imageUri = imageUri?.toString()
+                    )
+
+                    onSaveItem(item)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

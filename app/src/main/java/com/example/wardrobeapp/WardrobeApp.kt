@@ -6,7 +6,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checkroom
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -37,9 +36,8 @@ fun WardrobeApp() {
         val navController = rememberNavController()
         
         val navItems = listOf(
-            NavItem(Screen.Home, "Home", Icons.Default.Home),
-            NavItem(Screen.Wardrobe, "Wardrobe", Icons.Default.Checkroom),
             NavItem(Screen.OutfitGenerator, "Outfits", Icons.Default.AutoAwesome),
+            NavItem(Screen.Wardrobe, "Wardrobe", Icons.Default.Checkroom),
             NavItem(Screen.Calendar, "Calendar", Icons.Default.CalendarMonth),
             NavItem(Screen.Settings, "Settings", Icons.Default.Settings)
         )

@@ -6,9 +6,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 
 @Composable
-fun OutfitGeneratorScreen(onBack: () -> Unit) {
+fun OutfitGeneratorScreen() {
     Column {
         Text(text = "Outfit Generator Screen")
-        Button(onClick = onBack) { Text("Back") }
+        // Back button removed as this is now the default start screen
     }
 }

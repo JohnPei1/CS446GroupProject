@@ -6,7 +6,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.wardrobeapp.ui.home.HomeScreen
 import com.example.wardrobeapp.ui.wardrobe.WardrobeScreen
 import com.example.wardrobeapp.ui.outfit.OutfitGeneratorScreen
 import com.example.wardrobeapp.ui.calendar.CalendarScreen
@@ -19,17 +18,9 @@ fun AppNavigation(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Home.route,
+        startDestination = Screen.OutfitGenerator.route,
         modifier = modifier
     ) {
-        composable(Screen.Home.route) {
-            HomeScreen(
-                onNavigateToWardrobe = { navController.navigate(Screen.Wardrobe.route) },
-                onNavigateToOutfitGenerator = { navController.navigate(Screen.OutfitGenerator.route) },
-                onNavigateToCalendar = { navController.navigate(Screen.Calendar.route) },
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
-            )
-        }
         composable(Screen.Wardrobe.route) {
             WardrobeScreen(
                 onNavigateToAddItem = { navController.navigate(Screen.AddItem.route) },
@@ -69,7 +60,7 @@ fun AppNavigation(
             }
         }
         composable(Screen.OutfitGenerator.route) {
-            OutfitGeneratorScreen(onBack = { navController.popBackStack() })
+            OutfitGeneratorScreen()
         }
         composable(Screen.Calendar.route) {
             CalendarScreen(onBack = { navController.popBackStack() })

@@ -1,7 +1,9 @@
 package com.example.wardrobeapp.navigation
 
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.wardrobeapp.ui.home.HomeScreen
@@ -38,13 +40,33 @@ fun AppNavigation(
             )
         }
         composable(Screen.AddItem.route) {
-            // Placeholder for AddItemScreen
-            androidx.compose.material3.Text("Add Item Screen stub")
+            // Updated placeholder for AddItemScreen with a Back button
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+            ) {
+                androidx.compose.material3.Text("Add Item Screen stub")
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.material3.Button(onClick = { navController.popBackStack() }) {
+                    androidx.compose.material3.Text("Back to Wardrobe")
+                }
+            }
         }
         composable(Screen.EditItem.route) { backStackEntry ->
             val itemId = backStackEntry.arguments?.getString("itemId")
-            // Placeholder for EditItemScreen
-            androidx.compose.material3.Text("Edit Item Screen stub for ID: $itemId")
+            // Updated placeholder for EditItemScreen with a Back button
+            androidx.compose.foundation.layout.Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+            ) {
+                androidx.compose.material3.Text("Edit Item Screen stub for ID: $itemId")
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.material3.Button(onClick = { navController.popBackStack() }) {
+                    androidx.compose.material3.Text("Back")
+                }
+            }
         }
         composable(Screen.OutfitGenerator.route) {
             OutfitGeneratorScreen(onBack = { navController.popBackStack() })

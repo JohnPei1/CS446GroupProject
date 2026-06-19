@@ -47,30 +47,30 @@ fun WardrobeApp() {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
-                NavigationBar {
-                    val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val currentDestination = navBackStackEntry?.destination
-                    
-                    navItems.forEach { item ->
-                        NavigationBarItem(
-                            icon = { Icon(item.icon, contentDescription = item.label) },
-                            label = { Text(item.label) },
-                            // highlight selected icon
-                            selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true,
-                            onClick = {
-                                navController.navigate(item.screen.route) {
-                                    // Avoid building up a large stack of destinations
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        // Save scrolling position (state)
-                                        saveState = true
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentDestination = navBackStackEntry?.destination
+                
+                // Only show bottom bar on top-level destinations
+                val showBottomBar = navItems.any { it.screen.route == currentDestination?.route }
+
+                if (showBottomBar) {
+                    NavigationBar {
+                        navItems.forEach { item ->
+                            NavigationBarItem(
+                                icon = { Icon(item.icon, contentDescription = item.label) },
+                                label = { Text(item.label) },
+                                selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true,
+                                onClick = {
+                                    navController.navigate(item.screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    // Avoid opening the same destination twice
-                                    launchSingleTop = true
-                                    // Allow restoring the state (scroll position)
-                                    restoreState = true
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }

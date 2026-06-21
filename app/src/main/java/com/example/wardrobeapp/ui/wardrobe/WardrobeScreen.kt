@@ -27,7 +27,11 @@ import com.example.wardrobeapp.domain.model.ClothingItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WardrobeScreen() {
+fun WardrobeScreen(
+    onNavigateToAddItem: () -> Unit,
+    onNavigateToEditItem: (String) -> Unit,
+    onBack: () -> Unit
+) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     val categories = listOf("All", "Tops", "Bottoms", "Footwear", "Outerwear")
@@ -43,9 +47,19 @@ fun WardrobeScreen() {
     )
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Wardrobe") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { /* TODO: Navigate to Add Screen */ },
+                onClick = onNavigateToAddItem,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
@@ -115,7 +129,7 @@ fun WardrobeScreen() {
                     items(filteredItems, key = { it.id }) { item ->
                         WardrobeItemCard(
                             item = item,
-                            onEdit = { /* Navigate to Edit */ },
+                            onEdit = { onNavigateToEditItem(item.id.toString()) },
                             onDelete = { /* Delete logic */ }
                         )
                     }

@@ -1,8 +1,12 @@
 package com.example.wardrobeapp
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.preferencesDataStore
 import com.example.wardrobeapp.data.local.AppDatabase
 import com.example.wardrobeapp.data.repository.*
+import kotlinx.coroutines.flow.map
 
 /**
  * Dependency Injection container for the app.
@@ -17,6 +21,8 @@ interface AppContainer {
 /**
  * Implementation of [AppContainer] that provides repository instances.
  */
+
+internal val Context.dataStore by preferencesDataStore(name = "settings")
 class AppDataContainer(private val context: Context) : AppContainer {
 
     private val database: AppDatabase by lazy {
@@ -42,8 +48,13 @@ class AppDataContainer(private val context: Context) : AppContainer {
 
     override val settingsRepository: SettingsRepository by lazy {
         object : SettingsRepository {
-            override val isDarkMode = kotlinx.coroutines.flow.flowOf(false)
-            override suspend fun setDarkMode(enabled: Boolean) {}
+            private val DARK_MODE = booleanPreferencesKey("dark_mode")
+            override val isDarkMode = context.dataStore.data.map {
+                it[DARK_MODE] ?: false
+            }
+            override suspend fun setDarkMode(enabled: Boolean) {
+                context.dataStore.edit { it[DARK_MODE] = enabled }
+            }
         }
     }
 }

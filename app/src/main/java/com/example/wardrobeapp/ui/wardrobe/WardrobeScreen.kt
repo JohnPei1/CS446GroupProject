@@ -1,6 +1,5 @@
 package com.example.wardrobeapp.ui.wardrobe
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -9,7 +8,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,7 +19,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
 
@@ -130,7 +127,7 @@ fun WardrobeScreen(
                         WardrobeItemCard(
                             item = item,
                             onEdit = { onNavigateToEditItem(item.id.toString()) },
-                            onDelete = { /* Delete logic */ }
+                            //onDelete = { /* Delete logic */ }
                         )
                     }
                 }
@@ -142,8 +139,8 @@ fun WardrobeScreen(
 @Composable
 fun WardrobeItemCard(
     item: ClothingItem,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onEdit: () -> Unit
+    //onDelete: () -> Unit
 ) {
     Card(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -200,7 +197,8 @@ fun WardrobeItemCard(
                             text = { Text("Delete") },
                             onClick = {
                                 showMenu = false
-                                onDelete()
+                                //TODO implement onDelete()
+                                //onDelete()
                             },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
                         )

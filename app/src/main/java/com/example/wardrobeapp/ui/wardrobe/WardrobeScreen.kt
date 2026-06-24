@@ -21,19 +21,15 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
-import com.example.wardrobeapp.navigation.Screen
-import com.example.wardrobeapp.navigation.AppNavigation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WardrobeScreen(
-    onAddItemClick: () -> Unit,
-    onEdit: () -> Unit
+    onNavigateToAddItem: () -> Unit,
+    onNavigateToEditItem: (String) -> Unit,
+    onBack: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
@@ -50,9 +46,19 @@ fun WardrobeScreen(
     )
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Wardrobe") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = onAddItemClick,
+                onClick = onNavigateToAddItem,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
@@ -122,7 +128,7 @@ fun WardrobeScreen(
                     items(filteredItems, key = { it.id }) { item ->
                         WardrobeItemCard(
                             item = item,
-                            onEdit = { onEdit() },
+                            onEdit = { onNavigateToEditItem(item.id.toString()) },
                             //onDelete = { /* Delete logic */ }
                         )
                     }

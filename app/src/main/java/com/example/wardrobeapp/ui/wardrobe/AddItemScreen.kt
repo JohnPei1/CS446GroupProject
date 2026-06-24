@@ -36,7 +36,7 @@ data class ClothingItem(
 @Composable
 fun AddItemScreen(
     onExitClick: ()->Unit,
-    onSaveItem: (ClothingItem) -> Unit
+    //onSaveItem: (ClothingItem) -> Unit
 ) {
 
     var itemName by remember { mutableStateOf("") }
@@ -250,7 +250,7 @@ fun AddItemScreen(
                         imageUri = imageUri?.toString()
                     )
 
-                    onSaveItem(item)
+                    //onSaveItem(item)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

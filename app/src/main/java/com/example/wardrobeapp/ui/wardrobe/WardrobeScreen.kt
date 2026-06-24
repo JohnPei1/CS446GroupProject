@@ -32,7 +32,8 @@ import com.example.wardrobeapp.navigation.AppNavigation
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WardrobeScreen(
-    onAddItemClick: () -> Unit
+    onAddItemClick: () -> Unit,
+    onEdit: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
@@ -121,8 +122,8 @@ fun WardrobeScreen(
                     items(filteredItems, key = { it.id }) { item ->
                         WardrobeItemCard(
                             item = item,
-                            onEdit = { /* Navigate to Edit */ },
-                            onDelete = { /* Delete logic */ }
+                            onEdit = { onEdit() },
+                            //onDelete = { /* Delete logic */ }
                         )
                     }
                 }
@@ -134,8 +135,8 @@ fun WardrobeScreen(
 @Composable
 fun WardrobeItemCard(
     item: ClothingItem,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onEdit: () -> Unit
+    //onDelete: () -> Unit
 ) {
     Card(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -192,7 +193,8 @@ fun WardrobeItemCard(
                             text = { Text("Delete") },
                             onClick = {
                                 showMenu = false
-                                onDelete()
+                                //TODO implement onDelete()
+                                //onDelete()
                             },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
                         )

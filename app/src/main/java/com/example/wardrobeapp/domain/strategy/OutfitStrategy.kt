@@ -10,3 +10,11 @@ import com.example.wardrobeapp.domain.model.OutfitConstraints
 interface OutfitStrategy {
     fun generateOutfit(items: List<ClothingItem>, constraints: OutfitConstraints): Outfit
 }
+
+/** Category names **/
+object Category {
+    const val TOPS = "Tops"
+    const val BOTTOMS = "Bottoms"
+    const val FOOTWEAR = "Footwear"
+    const val OUTERWEAR = "Outerwear"
+}

@@ -7,4 +7,5 @@ import com.example.wardrobeapp.domain.model.WeatherInfo
  */
 interface WeatherRepository {
     suspend fun getCurrentWeather(lat: Double, lon: Double): WeatherInfo
+    suspend fun getForecastOneWeek(lat: Double, lon: Double): Map<Long, WeatherInfo>
 }

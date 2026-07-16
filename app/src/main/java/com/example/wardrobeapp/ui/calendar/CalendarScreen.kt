@@ -1,14 +1,176 @@
 package com.example.wardrobeapp.ui.calendar
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.domain.model.WeatherInfo
+import com.example.wardrobeapp.ui.outfit.OutfitItemRow
+import java.text.SimpleDateFormat
+import java.util.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CalendarScreen(
+    onBack: () -> Unit,
+    onNavigateToPlanner: (Long) -> Unit,
+    viewModel: CalendarViewModel = viewModel(
+        factory = CalendarViewModel.provideFactory(LocalContext.current)
+    )
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = uiState.selectedDate
+    )
+
+    // Sync date picker state with UI state
+    LaunchedEffect(datePickerState.selectedDateMillis) {
+        datePickerState.selectedDateMillis?.let {
+            viewModel.onDateSelected(it)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Calendar") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            // Weather Forecast Section
+            item {
+                ForecastSection(uiState.weatherForecast)
+            }
+
+            // Calendar Section
+            item {
+                DatePicker(
+                    state = datePickerState,
+                    modifier = Modifier.fillMaxWidth(),
+                    showModeToggle = false,
+                    title = null,
+                    headline = null
+                )
+            }
+
+            // Selected Date Details
+            item {
+                SelectedDateDetails(
+                    date = uiState.selectedDate,
+                    outfit = uiState.scheduledOutfits[uiState.selectedDate],
+                    weather = uiState.weatherForecast[uiState.selectedDate],
+                    onPlanOutfit = { onNavigateToPlanner(uiState.selectedDate) }
+                )
+            }
+        }
+    }
+}
 
 @Composable
-fun CalendarScreen(onBack: () -> Unit) {
-    Column {
-        Text(text = "Calendar Screen")
-        Button(onClick = onBack) { Text("Back") }
+fun ForecastSection(forecast: Map<Long, WeatherInfo>) {
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text("7-Day Forecast", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val sortedDates = forecast.keys.sorted()
+            items(sortedDates) { date ->
+                val weather = forecast[date]!!
+                Card {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(formatDateShort(date), style = MaterialTheme.typography.labelSmall)
+                        Text("${weather.temperature}°C", style = MaterialTheme.typography.bodyMedium)
+                        Text(weather.condition, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
     }
+}
+
+@Composable
+fun SelectedDateDetails(
+    date: Long,
+    outfit: Outfit?,
+    weather: WeatherInfo?,
+    onPlanOutfit: () -> Unit
+) {
+    Column(modifier = Modifier.padding(16.dp)) {
+        Text(
+            text = "Details for ${formatDateLong(date)}",
+            style = MaterialTheme.typography.titleLarge
+        )
+        
+        weather?.let {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Weather: ${it.temperature}°C, ${it.condition}")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (outfit != null) {
+            Text(
+                text = outfit.name,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            outfit.items.forEach { item ->
+                OutfitItemRow(item = item)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        } else {
+            Text("No outfit planned for this day.")
+            Spacer(modifier = Modifier.height(8.dp))
+            if (normalizeDate(date) >= normalizeDate(System.currentTimeMillis())) {
+                Button(onClick = onPlanOutfit) {
+                    Text("Plan Outfit")
+                }
+            }
+        }
+    }
+}
+
+fun formatDateShort(date: Long): String {
+    val sdf = SimpleDateFormat("EEE d", Locale.getDefault())
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    return sdf.format(Date(date))
+}
+
+fun formatDateLong(date: Long): String {
+    val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    return sdf.format(Date(date))
+}
+
+private fun normalizeDate(timeInMillis: Long): Long {
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+    calendar.timeInMillis = timeInMillis
+    calendar.set(Calendar.HOUR_OF_DAY, 0)
+    calendar.set(Calendar.MINUTE, 0)
+    calendar.set(Calendar.SECOND, 0)
+    calendar.set(Calendar.MILLISECOND, 0)
+    return calendar.timeInMillis
 }

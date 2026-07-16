@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,22 +45,36 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.Outfit
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @Composable
 fun OutfitGeneratorScreen(
+    date: Long? = null,
     viewModel: OutfitViewModel = viewModel(
         factory = OutfitViewModel.provideFactory(LocalContext.current)
     )
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var weatherAware by remember { mutableStateOf(true) }
+
+    LaunchedEffect(date) {
+        if (date != null) {
+            viewModel.loadPlannedOutfit(date)
+        } else {
+            viewModel.loadPlannedOutfit(System.currentTimeMillis())
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
         Text(
-            text = "Outfit Generator",
+            text = if (date != null) "Outfit for ${formatDateLong(date)}" else "Outfit Generator",
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
         )
         Spacer(Modifier.height(4.dp))
@@ -173,3 +188,9 @@ private fun OutfitResult(outfit: Outfit) {
                 items(outfit.items, key = { it.id }) { item ->
                     OutfitItemRow(item)
                 } } } } }
+
+private fun formatDateLong(date: Long): String {
+    val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    return sdf.format(Date(date))
+}

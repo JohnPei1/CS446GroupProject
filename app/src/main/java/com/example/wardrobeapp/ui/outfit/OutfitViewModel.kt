@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.util.TimeZone
 
 class OutfitViewModel(
     private val outfitRepository: OutfitRepository,
@@ -30,6 +32,36 @@ class OutfitViewModel(
 
     private val simpleStrategy: OutfitStrategy = SimpleOutfitStrategy()
     private val weatherAwareStrategy: OutfitStrategy = WeatherAwareOutfitStrategy()
+
+    fun loadPlannedOutfit(date: Long) {
+        viewModelScope.launch {
+            val normalizedDate = normalizeDate(date)
+            val planned = outfitRepository.getScheduledOutfit(normalizedDate)
+            if (planned != null) {
+                _uiState.value = _uiState.value.copy(generatedOutfit = planned)
+            }
+        }
+    }
+
+    private fun loadTodayPlannedOutfit() {
+        viewModelScope.launch {
+            val today = normalizeDate(System.currentTimeMillis())
+            val planned = outfitRepository.getScheduledOutfit(today)
+            if (planned != null) {
+                _uiState.value = _uiState.value.copy(generatedOutfit = planned)
+            }
+        }
+    }
+
+    private fun normalizeDate(timeInMillis: Long): Long {
+        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        calendar.timeInMillis = timeInMillis
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        return calendar.timeInMillis
+    }
 
     /** Generates a new outfit, factors in the weather if given. */
     fun generate(weatherAware: Boolean = true) {

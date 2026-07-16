@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,22 +45,36 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.Outfit
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @Composable
 fun OutfitGeneratorScreen(
+    date: Long? = null,
     viewModel: OutfitViewModel = viewModel(
         factory = OutfitViewModel.provideFactory(LocalContext.current)
     )
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var weatherAware by remember { mutableStateOf(true) }
+
+    LaunchedEffect(date) {
+        if (date != null) {
+            viewModel.loadPlannedOutfit(date)
+        } else {
+            viewModel.loadPlannedOutfit(System.currentTimeMillis())
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
         Text(
-            text = "Outfit Generator",
+            text = if (date != null) "Outfit for ${formatDateLong(date)}" else "Outfit Generator",
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
         )
         Spacer(Modifier.height(4.dp))
@@ -175,34 +189,8 @@ private fun OutfitResult(outfit: Outfit) {
                     OutfitItemRow(item)
                 } } } } }
 
-@Composable
-private fun OutfitItemRow(item: ClothingItem) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth() ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp)
-        ) {
-            AsyncImage(
-                model = item.imagePath,
-                contentDescription = item.name,
-                contentScale = ContentScale.Crop,
-                error = painterResource(android.R.drawable.ic_menu_gallery),
-                placeholder = painterResource(android.R.drawable.ic_menu_gallery),
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(
-                    item.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-                Text(
-                    item.category,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                ) } } } }
+private fun formatDateLong(date: Long): String {
+    val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    return sdf.format(Date(date))
+}

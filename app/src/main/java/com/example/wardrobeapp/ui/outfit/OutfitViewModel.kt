@@ -31,6 +31,20 @@ class OutfitViewModel(
     private val simpleStrategy: OutfitStrategy = SimpleOutfitStrategy()
     private val weatherAwareStrategy: OutfitStrategy = WeatherAwareOutfitStrategy()
 
+    init {
+        loadTodayPlannedOutfit()
+    }
+
+    private fun loadTodayPlannedOutfit() {
+        viewModelScope.launch {
+            val today = System.currentTimeMillis()
+            val planned = outfitRepository.getScheduledOutfit(today)
+            if (planned != null) {
+                _uiState.value = _uiState.value.copy(generatedOutfit = planned)
+            }
+        }
+    }
+
     /** Generates a new outfit, factors in the weather if given. */
     fun generate(weatherAware: Boolean = true) {
         viewModelScope.launch {

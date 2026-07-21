@@ -112,21 +112,29 @@ fun OutfitGeneratorScreen(
         if (optionsExpanded) {
             Spacer(Modifier.height(8.dp))
             Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Weather-aware", style = MaterialTheme.typography.titleSmall)
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Weather-aware", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "When on: adds a layer if it's cold, and scores every pick by " +
+                                    "how well its warmth fits the temperature",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = weatherAware, onCheckedChange = { weatherAware = it })
+                    }
+                    if (weatherAware) {
+                        Spacer(Modifier.height(4.dp))
+                        val weatherText = uiState.lastWeatherUsed?.let { "Last used: ${it.temperature.toInt()}°C, ${it.condition}" }
+                            ?: "Will use placeholder weather (8°C, Cloudy)"
                         Text(
-                            "Add warmer clothing when it's cold",
+                            "$weatherText — live weather isn't connected yet",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.tertiary
                         )
                     }
-                    Switch(checked = weatherAware, onCheckedChange = { weatherAware = it })
                 }
             }
 
@@ -185,7 +193,7 @@ fun OutfitGeneratorScreen(
                     modifier = Modifier.padding(16.dp)
                 )
                 uiState.generatedOutfit == null -> EmptyOutfitMessage()
-                else -> OutfitResult(outfit = uiState.generatedOutfit!!)
+                else -> OutfitResult(outfit = uiState.generatedOutfit!!, isPlanned = uiState.isPlanned)
             } }
 
         Spacer(Modifier.height(12.dp))
@@ -263,18 +271,41 @@ private fun EmptyOutfitMessage() {
 }
 
 @Composable
-private fun OutfitResult(outfit: Outfit) {
+private fun OutfitResult(outfit: Outfit, isPlanned: Boolean = false) {
     Column(modifier = Modifier.fillMaxSize()) {
+        if (isPlanned) {
+            Text(
+                text = "Your saved plan for today — tap Try Again for a fresh generated outfit",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Spacer(Modifier.height(4.dp))
+        }
         Text(
             text = outfit.name,
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
         )
-        outfit.note?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (!isPlanned) {
+            Spacer(Modifier.height(8.dp))
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = if (outfit.isAiGenerated) "AI suggestion" else "Smart pick",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = outfit.note ?: "No explanation available.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(12.dp))
         if (outfit.items.isEmpty()) {

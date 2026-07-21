@@ -14,8 +14,23 @@ class AiOutfitStrategyParseTest {
         Category.TOPS to listOf(item(1, Category.TOPS), item(2, Category.TOPS)),
         Category.BOTTOMS to listOf(item(10, Category.BOTTOMS)),
         Category.FOOTWEAR to listOf(item(20, Category.FOOTWEAR)),
-        Category.OUTERWEAR to listOf(item(30, Category.OUTERWEAR))
+        Category.OUTERWEAR to listOf(item(30, Category.OUTERWEAR)),
+        Category.ACCESSORIES to listOf(item(40, Category.ACCESSORIES))
     )
+
+    @Test
+    fun includesAccessoryWhenSpecified() {
+        val raw = """{"topId": 1, "bottomId": 10, "footwearId": 20, "accessoryId": 40, "reasoning": "with a chain"}"""
+        val result = parseAndValidate(raw, candidates)
+        assertTrue(result.items.any { it.id == 40L })
+    }
+
+    @Test
+    fun omitsAccessoryWhenNotSpecified() {
+        val raw = """{"topId": 1, "bottomId": 10, "footwearId": 20, "reasoning": "no accessory needed"}"""
+        val result = parseAndValidate(raw, candidates)
+        assertTrue(result.items.none { it.category == Category.ACCESSORIES })
+    }
 
     @Test
     fun parsesValidJsonReply() {

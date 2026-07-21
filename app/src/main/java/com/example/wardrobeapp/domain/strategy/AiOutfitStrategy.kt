@@ -25,6 +25,7 @@ internal data class AiOutfitPick(
     val bottomId: Long? = null,
     val footwearId: Long? = null,
     val outerwearId: Long? = null,
+    val accessoryId: Long? = null,
     val reasoning: String? = null
 )
 
@@ -46,7 +47,8 @@ class AiOutfitStrategy(private val modelManager: LlmModelManager) : OutfitStrate
             Category.TOPS to OutfitScorer.topCandidates(items, Category.TOPS, constraints, emptyList(), CANDIDATE_LIMIT),
             Category.BOTTOMS to OutfitScorer.topCandidates(items, Category.BOTTOMS, constraints, emptyList(), CANDIDATE_LIMIT),
             Category.FOOTWEAR to OutfitScorer.topCandidates(items, Category.FOOTWEAR, constraints, emptyList(), CANDIDATE_LIMIT),
-            Category.OUTERWEAR to OutfitScorer.topCandidates(items, Category.OUTERWEAR, constraints, emptyList(), CANDIDATE_LIMIT)
+            Category.OUTERWEAR to OutfitScorer.topCandidates(items, Category.OUTERWEAR, constraints, emptyList(), CANDIDATE_LIMIT),
+            Category.ACCESSORIES to OutfitScorer.topCandidates(items, Category.ACCESSORIES, constraints, emptyList(), CANDIDATE_LIMIT)
         )
         val missing = buildList {
             if (candidatesByCategory[Category.TOPS].isNullOrEmpty()) add(Category.TOPS)
@@ -61,7 +63,10 @@ class AiOutfitStrategy(private val modelManager: LlmModelManager) : OutfitStrate
         // on-device model would silently produce the same "pants only" bug this replaces.
         val allowRequiredOmission = !constraints.userPrompt.isNullOrBlank()
         val result = parseAndValidate(raw, candidatesByCategory, allowRequiredOmission)
-        return Outfit(name = "AI Pick", items = result.items, note = result.reasoning)
+        val reasoning = result.reasoning?.takeIf { it.isNotBlank() }
+            ?: "Picked by the on-device AI from your wardrobe, weighing the occasion, weather, " +
+                "and your request to put together a combination it judged worked well together."
+        return Outfit(name = "AI Pick", items = result.items, note = reasoning, isAiGenerated = true)
     }
 
     private fun buildPrompt(candidatesByCategory: Map<String, List<ClothingItem>>, constraints: OutfitConstraints): String {
@@ -81,10 +86,15 @@ class AiOutfitStrategy(private val modelManager: LlmModelManager) : OutfitStrate
               needs a socially acceptable top and bottom for public wear.
             - Only set topId or bottomId to null if the user's request clearly calls for it (e.g. "swimming",
               "just the jacket", "no shirt needed") -- and briefly say why in reasoning.
-            - footwearId and outerwearId are always optional; use null to skip them.
+            - footwearId, outerwearId, and accessoryId are always optional; use null to skip them.
+            - Include an accessoryId ONLY if it clearly matches the user's request or occasion (e.g. the
+              user mentioned jewelry, a bag, a hat) -- do not add one just because one is available.
             - Prefer candidates whose tags/colorFamily fit the occasion, weather, and user's request.
+            - Always fill in "reasoning" with 1-2 full sentences (about 30-50 words) explaining the
+              pick: mention which items you chose, why their colors/tags work together, and how the
+              occasion, weather, or user's request shaped the choice. Do not just repeat the rules.
             Reply with ONLY strict JSON, no markdown, no extra text, in exactly this shape:
-            {"topId": <id or null>, "bottomId": <id or null>, "footwearId": <id or null>, "outerwearId": <id or null>, "reasoning": "<=25 words explaining the pick"}
+            {"topId": <id or null>, "bottomId": <id or null>, "footwearId": <id or null>, "outerwearId": <id or null>, "accessoryId": <id or null>, "reasoning": "1-2 sentences (about 30-50 words) explaining the pick"}
         """.trimIndent()
     }
 
@@ -124,7 +134,8 @@ internal fun parseAndValidate(
         resolve(Category.TOPS, pick.topId, required = true),
         resolve(Category.BOTTOMS, pick.bottomId, required = true),
         resolve(Category.FOOTWEAR, pick.footwearId, required = false),
-        resolve(Category.OUTERWEAR, pick.outerwearId, required = false)
+        resolve(Category.OUTERWEAR, pick.outerwearId, required = false),
+        resolve(Category.ACCESSORIES, pick.accessoryId, required = false)
     )
     return AiPickResult(items, pick.reasoning)
 }

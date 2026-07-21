@@ -17,6 +17,7 @@ object Category {
     const val BOTTOMS = "Bottoms"
     const val FOOTWEAR = "Footwear"
     const val OUTERWEAR = "Outerwear"
+    const val ACCESSORIES = "Accessories"
 }
 
 /**

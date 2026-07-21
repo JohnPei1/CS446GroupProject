@@ -107,4 +107,53 @@ class OutfitScorerTest {
         )
         assertTrue(ranked.isEmpty())
     }
+
+    @Test
+    fun pickBest_avoidsRepeatingLastGenerationsPickWhenAnAlternativeExists() {
+        // Reproduces "keeps giving the same outfit": two otherwise-tied tops, one flagged as
+        // recently shown, should reliably favor the untouched one.
+        val shownLastTime = top(id = 1)
+        val alternative = top(id = 2)
+        val constraints = OutfitConstraints(recentItemIds = setOf(1L))
+        repeat(20) {
+            val picked = OutfitScorer.pickBest(listOf(shownLastTime, alternative), Category.TOPS, constraints, emptyList())
+            assertEquals(alternative.id, picked?.id)
+        }
+    }
+
+    @Test
+    fun matchedAccessory_returnsNullWithoutPromptOrOccasion() {
+        val chain = accessory(id = 1, name = "Gold Chain", color = "Gold")
+        val picked = OutfitScorer.matchedAccessory(listOf(chain), OutfitConstraints())
+        assertEquals(null, picked)
+    }
+
+    @Test
+    fun matchedAccessory_returnsItemOnPromptKeywordMatch() {
+        // Reproduces the reported bug: typing "gold chain" should surface the Accessories item,
+        // which no strategy previously considered at all.
+        val chain = accessory(id = 1, name = "Gold Chain", color = "Gold")
+        val belt = accessory(id = 2, name = "Leather Belt", color = "Brown")
+        val picked = OutfitScorer.matchedAccessory(listOf(belt, chain), OutfitConstraints(userPrompt = "Using gold chain"))
+        assertEquals(chain.id, picked?.id)
+    }
+
+    @Test
+    fun matchedAccessory_returnsItemOnOccasionTagMatch() {
+        val formalWatch = accessory(id = 1, name = "Watch", tags = listOf("Formal"))
+        val picked = OutfitScorer.matchedAccessory(listOf(formalWatch), OutfitConstraints(occasion = "Formal"))
+        assertEquals(formalWatch.id, picked?.id)
+    }
+
+    @Test
+    fun buildNote_isNeverBlank() {
+        assertTrue(OutfitScorer.buildNote(OutfitConstraints()).isNotBlank())
+    }
+
+    private fun accessory(
+        id: Long,
+        name: String = "Item $id",
+        color: String = "",
+        tags: List<String> = emptyList()
+    ) = ClothingItem(id = id, name = name, category = Category.ACCESSORIES, imagePath = "", color = color, tags = tags)
 }

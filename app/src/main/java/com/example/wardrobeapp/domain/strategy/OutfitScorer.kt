@@ -14,6 +14,7 @@ object OutfitScorer {
     private const val RECENT_WORN_WINDOW_MS = 3L * 24 * 60 * 60 * 1000 // 3 days
     private const val VARIETY_SCORE_MARGIN = 6 // ties within this margin are randomized; a clear winner is not
     private const val PROMPT_MATCH_BONUS = 20
+    private const val RECENT_GENERATION_PENALTY = 10 // discourages repeating last generation's picks
 
     private val PROMPT_STOPWORDS = setOf(
         "and", "the", "for", "with", "your", "need", "want", "just", "some",
@@ -92,7 +93,28 @@ object OutfitScorer {
 
         score += promptMatchBonus(item, constraints.userPrompt)
 
+        if (item.id in constraints.recentItemIds) score -= RECENT_GENERATION_PENALTY
+
         return score
+    }
+
+    /**
+     * Returns an accessory only when there's a genuine reason to include one -- a user-prompt
+     * keyword match or an occasion-tag match -- rather than tacking a random accessory onto every
+     * outfit. This is how a typed request like "gold chain" actually surfaces an Accessories item;
+     * none of the strategies previously considered that category at all.
+     */
+    fun matchedAccessory(items: List<ClothingItem>, constraints: OutfitConstraints): ClothingItem? {
+        if (constraints.userPrompt.isNullOrBlank() && constraints.occasion == null) return null
+        val candidates = items.filter { it.category.equals(Category.ACCESSORIES, ignoreCase = true) }
+        if (candidates.isEmpty()) return null
+
+        val best = candidates.maxByOrNull { score(it, constraints, emptyList()) } ?: return null
+        val occasionMatch = constraints.occasion?.let { occasion ->
+            best.tags.any { it.equals(occasion, ignoreCase = true) }
+        } ?: false
+        val promptMatch = promptMatchBonus(best, constraints.userPrompt) > 0
+        return if (occasionMatch || promptMatch) best else null
     }
 
     /**
@@ -117,6 +139,25 @@ object OutfitScorer {
         }
         val matches = words.count { haystack.contains(it) }
         return matches * PROMPT_MATCH_BONUS
+    }
+
+    /**
+     * Builds a human-readable explanation of what influenced a deterministic pick, so an outfit
+     * is never shown with no rationale at all -- falls back to a generic reason when nothing
+     * specific (occasion/weather/prompt) was set.
+     */
+    fun buildNote(constraints: OutfitConstraints, extra: List<String> = emptyList()): String {
+        val clauses = buildList {
+            constraints.occasion?.let { add("matched to a $it occasion") }
+            addAll(extra)
+            constraints.userPrompt?.takeIf { it.isNotBlank() }?.let { add("shaped by your note \"$it\"") }
+        }
+        return if (clauses.isEmpty()) {
+            "Picked from your wardrobe for a balanced color pairing, favoring pieces you haven't " +
+                "worn as recently to keep things varied."
+        } else {
+            "Picked from your wardrobe, " + clauses.joinToString(", and ") + "."
+        }
     }
 
     /** Bucketed target warmth (1-5) for a given temperature. */

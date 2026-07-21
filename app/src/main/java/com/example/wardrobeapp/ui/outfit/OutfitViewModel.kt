@@ -42,12 +42,17 @@ class OutfitViewModel(
     private val weatherAwareStrategy: OutfitStrategy = WeatherAwareOutfitStrategy()
     private val aiStrategy: OutfitStrategy = AiOutfitStrategy(llmModelManager)
 
+    // Session-only (not persisted): the previous generation's item ids, so repeatedly hitting
+    // "Try Again" actually rotates through different combinations instead of re-picking the same
+    // top-scoring items every time when there's no other distinguishing signal.
+    private var recentItemIds: Set<Long> = emptySet()
+
     fun loadPlannedOutfit(date: Long) {
         viewModelScope.launch {
             val normalizedDate = normalizeDate(date)
             val planned = outfitRepository.getScheduledOutfit(normalizedDate)
             if (planned != null) {
-                _uiState.value = _uiState.value.copy(generatedOutfit = planned)
+                _uiState.value = _uiState.value.copy(generatedOutfit = planned, isPlanned = true)
             }
         }
     }
@@ -80,12 +85,24 @@ class OutfitViewModel(
             val weather = if (weatherAware) {
                 runCatching { weatherRepository.getCurrentWeather(DEFAULT_LAT, DEFAULT_LON) }.getOrNull()
             } else null
-            val constraints = OutfitConstraints(weather = weather, occasion = occasion, userPrompt = userPrompt)
+            val constraints = OutfitConstraints(
+                weather = weather,
+                occasion = occasion,
+                userPrompt = userPrompt,
+                recentItemIds = recentItemIds
+            )
             val fallbackStrategy = if (weatherAware) weatherAwareStrategy else simpleStrategy
 
             try {
                 val outfit = tryAiOutfit(items, constraints) ?: fallbackStrategy.generateOutfit(items, constraints)
-                _uiState.value = _uiState.value.copy(generatedOutfit = outfit, isLoading = false, error = null)
+                recentItemIds = outfit.items.map { it.id }.toSet()
+                _uiState.value = _uiState.value.copy(
+                    generatedOutfit = outfit,
+                    isLoading = false,
+                    error = null,
+                    isPlanned = false,
+                    lastWeatherUsed = weather
+                )
             } catch (e: IncompleteOutfitException) {
                 _uiState.value = _uiState.value.copy(
                     generatedOutfit = null,

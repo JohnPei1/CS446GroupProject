@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import com.example.wardrobeapp.data.local.dao.ClothingItemDao
 import com.example.wardrobeapp.data.local.dao.OutfitDao
 import com.example.wardrobeapp.data.local.dao.ScheduledOutfitDao
@@ -17,9 +18,10 @@ import com.example.wardrobeapp.data.local.entity.ScheduledOutfitEntity
         OutfitEntity::class,
         ScheduledOutfitEntity::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun clothingItemDao(): ClothingItemDao
     abstract fun outfitDao(): OutfitDao

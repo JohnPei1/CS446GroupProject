@@ -19,7 +19,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wardrobeapp.domain.model.ClothingItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,21 +29,15 @@ import com.example.wardrobeapp.domain.model.ClothingItem
 fun WardrobeScreen(
     onNavigateToAddItem: () -> Unit,
     onNavigateToEditItem: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: WardrobeViewModel = viewModel(factory = WardrobeViewModel.Factory)
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
-    val categories = listOf("All", "Tops", "Bottoms", "Footwear", "Outerwear")
+    val categories = listOf("All", "Tops", "Bottoms", "Footwear", "Outerwear", "Accessories")
 
-    // Dummy data for UI preview, TODO: Remove and replace with actual data
-    val clothData = listOf(
-        ClothingItem(1, "White T-Shirt", "Tops", ""),
-        ClothingItem(2, "Blue Jeans", "Bottoms", ""),
-        ClothingItem(3, "Sneakers", "Footwear", ""),
-        ClothingItem(4, "Winter Coat", "Outerwear", ""),
-        ClothingItem(5, "Black Hoodie", "Tops", ""),
-        ClothingItem(6, "Brown Boots", "Footwear", ""),
-    )
+    val clothData = uiState.items
 
     Scaffold(
         topBar = {
@@ -127,7 +123,7 @@ fun WardrobeScreen(
                         WardrobeItemCard(
                             item = item,
                             onEdit = { onNavigateToEditItem(item.id.toString()) },
-                            //onDelete = { /* Delete logic */ }
+                            onDelete = { viewModel.deleteItem(item) }
                         )
                     }
                 }
@@ -139,8 +135,8 @@ fun WardrobeScreen(
 @Composable
 fun WardrobeItemCard(
     item: ClothingItem,
-    onEdit: () -> Unit
-    //onDelete: () -> Unit
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Card(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -197,8 +193,7 @@ fun WardrobeItemCard(
                             text = { Text("Delete") },
                             onClick = {
                                 showMenu = false
-                                //TODO implement onDelete()
-                                //onDelete()
+                                onDelete()
                             },
                             leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) }
                         )

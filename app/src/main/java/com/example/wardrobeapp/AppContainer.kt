@@ -43,7 +43,7 @@ class AppDataContainer(private val context: Context) : AppContainer {
     }
 
     override val weatherRepository: WeatherRepository by lazy {
-        OfflineWeatherRepository()
+        WeatherRepository()
     }
 
     override val settingsRepository: SettingsRepository by lazy {

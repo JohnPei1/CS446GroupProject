@@ -1,6 +1,7 @@
 package com.example.wardrobeapp.data.remote
 
 import retrofit2.http.GET
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -11,6 +12,7 @@ interface OpenMeteoApi {
     suspend fun getWeather(
         @Query("latitude") lat: Double,
         @Query("longitude") lon: Double,
-        @Query("current_weather") current: Boolean = true
+        @Query("daily") daily: String="temperature_2m_max,temperature_2m_min,weather_code",
+        @Query("current") current: String="temperature_2m,weather_code"
     ): WeatherDto
 }

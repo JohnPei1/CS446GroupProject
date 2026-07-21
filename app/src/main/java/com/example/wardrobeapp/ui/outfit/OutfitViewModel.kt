@@ -5,11 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.wardrobeapp.WardrobeApplication
+import com.example.wardrobeapp.data.local.ai.LlmModelManager
 import com.example.wardrobeapp.data.repository.OutfitRepository
+import com.example.wardrobeapp.data.repository.SettingsRepository
 import com.example.wardrobeapp.data.repository.WardrobeRepository
 import com.example.wardrobeapp.data.repository.WeatherRepository
 import com.example.wardrobeapp.domain.model.ClothingItem
+import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.OutfitConstraints
+import com.example.wardrobeapp.domain.strategy.AiOutfitStrategy
+import com.example.wardrobeapp.domain.strategy.IncompleteOutfitException
 import com.example.wardrobeapp.domain.strategy.OutfitStrategy
 import com.example.wardrobeapp.domain.strategy.SimpleOutfitStrategy
 import com.example.wardrobeapp.domain.strategy.WeatherAwareOutfitStrategy
@@ -18,13 +23,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Calendar
 import java.util.TimeZone
 
 class OutfitViewModel(
     private val outfitRepository: OutfitRepository,
     private val weatherRepository: WeatherRepository,
-    private val wardrobeRepository: WardrobeRepository
+    private val wardrobeRepository: WardrobeRepository,
+    private val settingsRepository: SettingsRepository,
+    private val llmModelManager: LlmModelManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OutfitUiState())
@@ -32,21 +40,12 @@ class OutfitViewModel(
 
     private val simpleStrategy: OutfitStrategy = SimpleOutfitStrategy()
     private val weatherAwareStrategy: OutfitStrategy = WeatherAwareOutfitStrategy()
+    private val aiStrategy: OutfitStrategy = AiOutfitStrategy(llmModelManager)
 
     fun loadPlannedOutfit(date: Long) {
         viewModelScope.launch {
             val normalizedDate = normalizeDate(date)
             val planned = outfitRepository.getScheduledOutfit(normalizedDate)
-            if (planned != null) {
-                _uiState.value = _uiState.value.copy(generatedOutfit = planned)
-            }
-        }
-    }
-
-    private fun loadTodayPlannedOutfit() {
-        viewModelScope.launch {
-            val today = normalizeDate(System.currentTimeMillis())
-            val planned = outfitRepository.getScheduledOutfit(today)
             if (planned != null) {
                 _uiState.value = _uiState.value.copy(generatedOutfit = planned)
             }
@@ -63,45 +62,76 @@ class OutfitViewModel(
         return calendar.timeInMillis
     }
 
-    /** Generates a new outfit, factors in the weather if given. */
-    fun generate(weatherAware: Boolean = true) {
+    /** Generates a new outfit, factors in the weather, occasion, and free-text prompt if given. */
+    fun generate(weatherAware: Boolean = true, occasion: String? = null, userPrompt: String? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val fetched = wardrobeRepository.getAllItems().first()
-            val items = if (fetched.isEmpty()) sampleWardrobe else fetched
+            val items = wardrobeRepository.getAllItems().first()
+
+            if (items.isEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    generatedOutfit = null,
+                    isLoading = false,
+                    error = "Your wardrobe is empty! Add some items first."
+                )
+                return@launch
+            }
+
             val weather = if (weatherAware) {
                 runCatching { weatherRepository.getCurrentWeather(DEFAULT_LAT, DEFAULT_LON) }.getOrNull()
             } else null
-            val strategy = if (weatherAware) weatherAwareStrategy else simpleStrategy
-            val outfit = strategy.generateOutfit(items, OutfitConstraints(weather = weather))
-            _uiState.value = _uiState.value.copy(generatedOutfit = outfit, isLoading = false)
+            val constraints = OutfitConstraints(weather = weather, occasion = occasion, userPrompt = userPrompt)
+            val fallbackStrategy = if (weatherAware) weatherAwareStrategy else simpleStrategy
+
+            try {
+                val outfit = tryAiOutfit(items, constraints) ?: fallbackStrategy.generateOutfit(items, constraints)
+                _uiState.value = _uiState.value.copy(generatedOutfit = outfit, isLoading = false, error = null)
+            } catch (e: IncompleteOutfitException) {
+                _uiState.value = _uiState.value.copy(
+                    generatedOutfit = null,
+                    isLoading = false,
+                    error = "Add at least one item to: ${e.missingCategories.joinToString(" and ")}. " +
+                        "A complete outfit needs a top and a bottom."
+                )
+            }
         } }
 
+    /**
+     * Attempts an on-device AI outfit when the user has opted in and imported a model. AI
+     * failures/timeouts are swallowed here -- generation always falls back to the deterministic
+     * strategy rather than blocking on AI availability.
+     */
+    private suspend fun tryAiOutfit(items: List<ClothingItem>, constraints: OutfitConstraints): Outfit? {
+        val aiEnabled = settingsRepository.isAiEnabled.first()
+        if (!aiEnabled || !llmModelManager.isModelAvailable()) return null
+        val outfit = runCatching {
+            withTimeoutOrNull(AI_TIMEOUT_MS) { aiStrategy.generateOutfit(items, constraints) }
+        }.getOrNull()
+        return outfit?.takeIf { it.items.isNotEmpty() }
+    }
+
     /** Re-try. */
-    fun retry(weatherAware: Boolean = true) = generate(weatherAware)
+    fun retry(weatherAware: Boolean = true, occasion: String? = null, userPrompt: String? = null) =
+        generate(weatherAware, occasion, userPrompt)
 
     /** Pushes current outfit. */
     fun save() {
+        // No-op for now as per user request
+    }
+
+    /** Records the currently generated outfit's items as worn, for anti-repetition scoring. */
+    fun markWorn() {
         val outfit = _uiState.value.generatedOutfit ?: return
-        viewModelScope.launch { outfitRepository.saveOutfit(outfit) }
+        viewModelScope.launch {
+            wardrobeRepository.markItemsWorn(outfit.items.map { it.id })
+        }
     }
 
     companion object {
         // Placeholder coordinates
         private const val DEFAULT_LAT = 43.46
         private const val DEFAULT_LON = -80.52
-
-        // Placeholder items
-        private val sampleWardrobe = listOf(
-            ClothingItem(1, "White T-Shirt", "Tops", ""),
-            ClothingItem(2, "Black Long Sleeve", "Tops", ""),
-            ClothingItem(3, "Black Jeans", "Bottoms", ""),
-            ClothingItem(4, "Grey Sweatpants", "Bottoms", ""),
-            ClothingItem(5, "Running Shoes", "Footwear", ""),
-            ClothingItem(6, "Rain Boots", "Footwear", ""),
-            ClothingItem(7, "Winter Jacket", "Outerwear", ""),
-            ClothingItem(8, "Light Jacket", "Outerwear", "")
-        )
+        private const val AI_TIMEOUT_MS = 20_000L
 
         fun provideFactory(context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
@@ -111,5 +141,7 @@ class OutfitViewModel(
                     return OutfitViewModel(
                         outfitRepository = container.outfitRepository,
                         weatherRepository = container.weatherRepository,
-                        wardrobeRepository = container.wardrobeRepository
+                        wardrobeRepository = container.wardrobeRepository,
+                        settingsRepository = container.settingsRepository,
+                        llmModelManager = container.llmModelManager
                     ) as T } } } }

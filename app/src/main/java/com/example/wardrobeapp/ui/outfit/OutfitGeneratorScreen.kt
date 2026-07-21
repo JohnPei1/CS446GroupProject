@@ -35,6 +35,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,9 +55,14 @@ import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.TagOptions
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 @Composable
 fun OutfitGeneratorScreen(
+    date: Long? = null,
     viewModel: OutfitViewModel = viewModel(
         factory = OutfitViewModel.provideFactory(LocalContext.current)
     )
@@ -72,6 +78,14 @@ fun OutfitGeneratorScreen(
         viewModel.generate(weatherAware, selectedOccasion, userPrompt)
     }
 
+    LaunchedEffect(date) {
+        if (date != null) {
+            viewModel.loadPlannedOutfit(date)
+        } else {
+            viewModel.loadPlannedOutfit(System.currentTimeMillis())
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -83,7 +97,7 @@ fun OutfitGeneratorScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Outfit Generator",
+                text = if (date != null) "Outfit for ${formatDateLong(date)}" else "Outfit Generator",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
             )
             TextButton(onClick = { optionsExpanded = !optionsExpanded }) {
@@ -306,3 +320,9 @@ private fun OutfitItemRow(item: ClothingItem) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.secondary
                 ) } } } }
+
+private fun formatDateLong(date: Long): String {
+    val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    return sdf.format(Date(date))
+}

@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.Calendar
+import java.util.TimeZone
 
 class OutfitViewModel(
     private val outfitRepository: OutfitRepository,
@@ -39,6 +41,26 @@ class OutfitViewModel(
     private val simpleStrategy: OutfitStrategy = SimpleOutfitStrategy()
     private val weatherAwareStrategy: OutfitStrategy = WeatherAwareOutfitStrategy()
     private val aiStrategy: OutfitStrategy = AiOutfitStrategy(llmModelManager)
+
+    fun loadPlannedOutfit(date: Long) {
+        viewModelScope.launch {
+            val normalizedDate = normalizeDate(date)
+            val planned = outfitRepository.getScheduledOutfit(normalizedDate)
+            if (planned != null) {
+                _uiState.value = _uiState.value.copy(generatedOutfit = planned)
+            }
+        }
+    }
+
+    private fun normalizeDate(timeInMillis: Long): Long {
+        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        calendar.timeInMillis = timeInMillis
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        return calendar.timeInMillis
+    }
 
     /** Generates a new outfit, factors in the weather, occasion, and free-text prompt if given. */
     fun generate(weatherAware: Boolean = true, occasion: String? = null, userPrompt: String? = null) {
@@ -110,18 +132,6 @@ class OutfitViewModel(
         private const val DEFAULT_LAT = 43.46
         private const val DEFAULT_LON = -80.52
         private const val AI_TIMEOUT_MS = 20_000L
-
-        // Placeholder items
-        private val sampleWardrobe = listOf(
-            ClothingItem(1, "White T-Shirt", "Tops", ""),
-            ClothingItem(2, "Black Long Sleeve", "Tops", ""),
-            ClothingItem(3, "Black Jeans", "Bottoms", ""),
-            ClothingItem(4, "Grey Sweatpants", "Bottoms", ""),
-            ClothingItem(5, "Running Shoes", "Footwear", ""),
-            ClothingItem(6, "Rain Boots", "Footwear", ""),
-            ClothingItem(7, "Winter Jacket", "Outerwear", ""),
-            ClothingItem(8, "Light Jacket", "Outerwear", "")
-        )
 
         fun provideFactory(context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {

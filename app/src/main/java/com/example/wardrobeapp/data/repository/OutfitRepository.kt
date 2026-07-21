@@ -10,4 +10,5 @@ interface OutfitRepository {
     fun getAllOutfits(): Flow<List<Outfit>>
     suspend fun saveOutfit(outfit: Outfit)
     suspend fun scheduleOutfit(outfitId: Long, date: Long)
+    suspend fun getScheduledOutfit(date: Long): Outfit?
 }

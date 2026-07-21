@@ -6,7 +6,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.example.wardrobeapp.ui.wardrobe.WardrobeScreen
 import com.example.wardrobeapp.ui.outfit.OutfitGeneratorScreen
 import com.example.wardrobeapp.ui.outfit.OutfitViewModel
@@ -39,13 +41,28 @@ fun AppNavigation(
                 viewModel = wardrobeViewModel
             )
         }
-        composable(Screen.OutfitGenerator.route) {
+        composable(
+            route = Screen.OutfitGenerator.route,
+            arguments = listOf(
+                navArgument("date") {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }
+            )
+        ) { backStackEntry ->
+            val date = backStackEntry.arguments?.getLong("date")?.takeIf { it != -1L }
             OutfitGeneratorScreen(
+                date = date,
                 viewModel = viewModel(factory = OutfitViewModel.provideFactory(context))
             )
         }
         composable(Screen.Calendar.route) {
-            CalendarScreen(onBack = { navController.popBackStack() })
+            CalendarScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToPlanner = { date ->
+                    navController.navigate(Screen.OutfitGenerator.createRoute(date))
+                }
+            )
         }
         composable(Screen.Settings.route) {
             SettingsScreen(onBack = { navController.popBackStack() })

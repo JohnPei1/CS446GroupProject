@@ -5,20 +5,30 @@ import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.OutfitConstraints
 
 /**
- * Basic outfit generator that picks items quickly.
+ * Outfit generator that scores candidates by occasion/color/variety (no weather influence). A
+ * complete, socially acceptable outfit requires a top and a bottom; if the wardrobe has neither,
+ * this throws [IncompleteOutfitException] rather than silently returning a partial outfit.
  */
 class SimpleOutfitStrategy : OutfitStrategy {
-    override fun generateOutfit(
+    override suspend fun generateOutfit(
         items: List<ClothingItem>,
         constraints: OutfitConstraints
     ): Outfit {
-        val selected = buildList {
-            pickRandom(items, Category.TOPS)?.let { add(it) }
-            pickRandom(items, Category.BOTTOMS)?.let { add(it) }
-            pickRandom(items, Category.FOOTWEAR)?.let { add(it) }
-        }
-        return Outfit(name = "Everyday Outfit", items = selected) }
+        val selected = mutableListOf<ClothingItem>()
+        val top = OutfitScorer.pickBest(items, Category.TOPS, constraints, selected)
+        top?.let { selected.add(it) }
+        val bottom = OutfitScorer.pickBest(items, Category.BOTTOMS, constraints, selected)
+        bottom?.let { selected.add(it) }
 
-    /** Returns category item randomly */
-    private fun pickRandom(items: List<ClothingItem>, category: String): ClothingItem? =
-        items.filter { it.category.equals(category, ignoreCase = true) }.randomOrNull() }
+        val missing = buildList {
+            if (top == null) add(Category.TOPS)
+            if (bottom == null) add(Category.BOTTOMS)
+        }
+        if (missing.isNotEmpty()) throw IncompleteOutfitException(missing)
+
+        OutfitScorer.pickBest(items, Category.FOOTWEAR, constraints, selected)?.let { selected.add(it) }
+
+        val note = constraints.occasion?.let { "Matched: $it" }
+        return Outfit(name = "Everyday Outfit", items = selected, note = note)
+    }
+}

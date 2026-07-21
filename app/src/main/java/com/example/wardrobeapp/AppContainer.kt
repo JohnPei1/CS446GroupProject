@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.wardrobeapp.data.local.AppDatabase
+import com.example.wardrobeapp.data.local.ai.LlmModelManager
 import com.example.wardrobeapp.data.repository.*
 import kotlinx.coroutines.flow.map
 
@@ -16,6 +17,7 @@ interface AppContainer {
     val outfitRepository: OutfitRepository
     val weatherRepository: WeatherRepository
     val settingsRepository: SettingsRepository
+    val llmModelManager: LlmModelManager
 }
 
 /**
@@ -30,12 +32,7 @@ class AppDataContainer(private val context: Context) : AppContainer {
     }
 
     override val wardrobeRepository: WardrobeRepository by lazy {
-        // This will eventually take a DAO (Hermela's task)
-        object : WardrobeRepository {
-            override fun getAllItems() = kotlinx.coroutines.flow.flowOf(emptyList<com.example.wardrobeapp.domain.model.ClothingItem>())
-            override suspend fun insertItem(item: com.example.wardrobeapp.domain.model.ClothingItem) {}
-            override suspend fun deleteItem(item: com.example.wardrobeapp.domain.model.ClothingItem) {}
-        }
+        OfflineWardrobeRepository(database.clothingItemDao())
     }
 
     override val outfitRepository: OutfitRepository by lazy {
@@ -49,12 +46,23 @@ class AppDataContainer(private val context: Context) : AppContainer {
     override val settingsRepository: SettingsRepository by lazy {
         object : SettingsRepository {
             private val DARK_MODE = booleanPreferencesKey("dark_mode")
+            private val AI_ENABLED = booleanPreferencesKey("ai_enabled")
             override val isDarkMode = context.dataStore.data.map {
                 it[DARK_MODE] ?: false
             }
             override suspend fun setDarkMode(enabled: Boolean) {
                 context.dataStore.edit { it[DARK_MODE] = enabled }
             }
+            override val isAiEnabled = context.dataStore.data.map {
+                it[AI_ENABLED] ?: false
+            }
+            override suspend fun setAiEnabled(enabled: Boolean) {
+                context.dataStore.edit { it[AI_ENABLED] = enabled }
+            }
         }
+    }
+
+    override val llmModelManager: LlmModelManager by lazy {
+        LlmModelManager(context.applicationContext)
     }
 }

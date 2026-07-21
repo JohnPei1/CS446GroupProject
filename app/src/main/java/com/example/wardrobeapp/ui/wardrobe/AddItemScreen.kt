@@ -20,31 +20,17 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.io.File
 import coil.compose.AsyncImage
 
-data class ClothingItem(
-    val id: Long,
-    val name: String,
-    val category: String,
-    val brand: String,
-    val color: String,
-    val description: String,
-    val imageUri: String?
-)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddItemScreen(
     onExitClick: ()->Unit,
-    //onSaveItem: (ClothingItem) -> Unit
+    viewModel: WardrobeViewModel = viewModel(factory = WardrobeViewModel.Factory)
 ) {
-
-    var itemName by remember { mutableStateOf("") }
-    var brand by remember { mutableStateOf("") }
-    var color by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-
-    var selectedCategory by remember { mutableStateOf("Tops") }
+    val formState = remember { ClothingItemFormState() }
 
     val context = LocalContext.current
 
@@ -52,11 +38,25 @@ fun AddItemScreen(
         mutableStateOf<Uri?>(null)
     }
 
+    var refreshKey by remember { mutableStateOf(0) }
+
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
-        if (!success) {
+        if (success) {
+            refreshKey++
+        } else {
             imageUri = null
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            val uri = createImageFile(context)
+            imageUri = uri
+            cameraLauncher.launch(uri)
         }
     }
 
@@ -67,16 +67,6 @@ fun AddItemScreen(
             imageUri = uri
         }
     }
-
-    val categories = listOf(
-        "Tops",
-        "Bottoms",
-        "Footwear",
-        "Outerwear",
-        "Accessories"
-    )
-
-    var expanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -110,12 +100,14 @@ fun AddItemScreen(
                 ) {
 
                     if (imageUri != null) {
-                        AsyncImage(
-                            model = imageUri,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                        key(refreshKey) {
+                            AsyncImage(
+                                model = imageUri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                     } else {
                         Text("No Image Selected")
                     }
@@ -128,10 +120,8 @@ fun AddItemScreen(
 
                 Button(
                     onClick = { //take photo
-                        val uri = createImageFile(context)
-                        imageUri = uri
-                        cameraLauncher.launch(uri)
-              },
+                        permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
@@ -166,91 +156,17 @@ fun AddItemScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = itemName,
-                onValueChange = { itemName = it },
-                label = { Text("Item Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = {
-                    expanded = !expanded
-                }
-            ) {
-
-                OutlinedTextField(
-                    value = selectedCategory,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Category") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded)
-                    },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = {
-                        expanded = false
-                    }
-                ) {
-
-                    categories.forEach { category ->
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(category)
-                            },
-                            onClick = {
-                                selectedCategory = category
-                                expanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            OutlinedTextField(
-                value = brand,
-                onValueChange = { brand = it },
-                label = { Text("Brand") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = color,
-                onValueChange = { color = it },
-                label = { Text("Color") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Notes") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
-            )
+            ClothingItemFormFields(formState)
 
             Button(
                 onClick = {
                     // Save item to database
-                    val item = ClothingItem(
-                        id = System.currentTimeMillis(),
-                        name = itemName,
-                        category = selectedCategory,
-                        brand = brand,
-                        color = color,
-                        description = description,
-                        imageUri = imageUri?.toString()
+                    val item = formState.toClothingItem(
+                        id = 0, // Room will auto-generate if we set it to 0 and the entity allows
+                        imagePath = imageUri?.toString() ?: ""
                     )
-
-                    //onSaveItem(item)
+                    viewModel.addItem(item)
+                    onExitClick()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -261,13 +177,17 @@ fun AddItemScreen(
 }
 
 fun createImageFile(context: Context): Uri {
+    val imageDir = File(context.cacheDir, "images")
+    if (!imageDir.exists()) {
+        imageDir.mkdirs()
+    }
     val imageFile = File(
-        context.cacheDir,
+        imageDir,
         "camera_photo_${System.currentTimeMillis()}.jpg"
     )
     return FileProvider.getUriForFile(
         context,
-        "${context.packageName}.provider",
+        "${context.packageName}.fileprovider",
         imageFile
     )
 }

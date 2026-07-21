@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.Flow
  */
 interface WardrobeRepository {
     fun getAllItems(): Flow<List<ClothingItem>>
+    fun getItem(id: Long): Flow<ClothingItem?>
     suspend fun insertItem(item: ClothingItem)
     suspend fun deleteItem(item: ClothingItem)
+    suspend fun markItemsWorn(ids: List<Long>)
 }

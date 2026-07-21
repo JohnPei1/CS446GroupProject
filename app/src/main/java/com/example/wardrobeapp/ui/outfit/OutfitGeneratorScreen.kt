@@ -14,19 +14,26 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Checkroom
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,12 +46,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.domain.model.TagOptions
 
 @Composable
 fun OutfitGeneratorScreen(
@@ -54,42 +63,99 @@ fun OutfitGeneratorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var weatherAware by remember { mutableStateOf(true) }
+    var selectedOccasion by remember { mutableStateOf<String?>(null) }
+    var userPrompt by remember { mutableStateOf("") }
+    var optionsExpanded by remember { mutableStateOf(true) }
+
+    fun generateAndCollapse() {
+        optionsExpanded = false
+        viewModel.generate(weatherAware, selectedOccasion, userPrompt)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        Text(
-            text = "Outfit Generator",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Generate an outfit from your wardrobe!",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(16.dp))
-        Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Weather-aware", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Add warmer clothing when it's cold",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(checked = weatherAware, onCheckedChange = { weatherAware = it })
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Outfit Generator",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+            )
+            TextButton(onClick = { optionsExpanded = !optionsExpanded }) {
+                Text(if (optionsExpanded) "Hide options" else "Options")
+                Icon(
+                    if (optionsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null
+                )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        if (optionsExpanded) {
+            Spacer(Modifier.height(8.dp))
+            Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Weather-aware", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Add warmer clothing when it's cold",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = weatherAware, onCheckedChange = { weatherAware = it })
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text("Occasion", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(4.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = selectedOccasion == null,
+                    onClick = { selectedOccasion = null },
+                    label = { Text("Any") }
+                )
+                TagOptions.OCCASIONS.forEach { occasion ->
+                    FilterChip(
+                        selected = selectedOccasion == occasion,
+                        onClick = { selectedOccasion = occasion },
+                        label = { Text(occasion) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = userPrompt,
+                onValueChange = { userPrompt = it },
+                label = { Text("Anything specific? (optional)") },
+                placeholder = { Text("e.g. red and black, going swimming, job interview") },
+                supportingText = { Text("Guides AI suggestions; also nudges color/keyword matching without AI.") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 1
+            )
+        } else {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = optionsSummary(weatherAware, selectedOccasion, userPrompt),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -98,14 +164,20 @@ fun OutfitGeneratorScreen(
         ) {
             when {
                 uiState.isLoading -> CircularProgressIndicator()
+                uiState.error != null -> Text(
+                    text = uiState.error!!,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(16.dp)
+                )
                 uiState.generatedOutfit == null -> EmptyOutfitMessage()
                 else -> OutfitResult(outfit = uiState.generatedOutfit!!)
             } }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         if (uiState.generatedOutfit == null) {
             Button(
-                onClick = { viewModel.generate(weatherAware) },
+                onClick = { generateAndCollapse() },
                 enabled = !uiState.isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -118,7 +190,7 @@ fun OutfitGeneratorScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedButton(
-                    onClick = { viewModel.retry(weatherAware) },
+                    onClick = { generateAndCollapse() },
                     enabled = !uiState.isLoading,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -134,7 +206,28 @@ fun OutfitGeneratorScreen(
                     Icon(Icons.Default.BookmarkAdd, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Save")
-                } } } } }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = { viewModel.markWorn() },
+                enabled = !uiState.isLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Checkroom, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Mark as Worn")
+            }
+        } } }
+
+private fun optionsSummary(weatherAware: Boolean, occasion: String?, userPrompt: String): String {
+    val parts = buildList {
+        if (weatherAware) add("Weather-aware")
+        occasion?.let { add(it) }
+        if (userPrompt.isNotBlank()) add("\"$userPrompt\"")
+    }
+    return if (parts.isEmpty()) "No extra preferences set" else parts.joinToString(" · ")
+}
 
 @Composable
 private fun EmptyOutfitMessage() {
@@ -162,6 +255,13 @@ private fun OutfitResult(outfit: Outfit) {
             text = outfit.name,
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
         )
+        outfit.note?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Spacer(Modifier.height(12.dp))
         if (outfit.items.isEmpty()) {
             Text(

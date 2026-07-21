@@ -27,20 +27,24 @@ fun EditItemScreen(
     viewModel: WardrobeViewModel,
     onExitClick: ()->Unit,
 ) {
-    //TODO implement getItem function in view model
-    //val item = viewModel.getItem(itemId)
+    val item by viewModel.getItem(itemId).collectAsState(initial = null)
 
-    var itemName by remember { mutableStateOf("") }
-    var brand by remember { mutableStateOf("") }
-    var color by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-
-    var selectedCategory by remember { mutableStateOf("Tops") }
+    val formState = remember { ClothingItemFormState() }
 
     val context = LocalContext.current
 
     var imageUri by remember {
         mutableStateOf<Uri?>(null)
+    }
+
+    // Initialize state when item is loaded
+    LaunchedEffect(item) {
+        item?.let {
+            formState.loadFrom(it)
+            if (it.imagePath.isNotEmpty()) {
+                imageUri = Uri.parse(it.imagePath)
+            }
+        }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -58,16 +62,6 @@ fun EditItemScreen(
             imageUri = uri
         }
     }
-
-    val categories = listOf(
-        "Tops",
-        "Bottoms",
-        "Footwear",
-        "Outerwear",
-        "Accessories"
-    )
-
-    var expanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -157,91 +151,20 @@ fun EditItemScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = itemName,
-                onValueChange = { itemName = it },
-                label = { Text("Item Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = {
-                    expanded = !expanded
-                }
-            ) {
-
-                OutlinedTextField(
-                    value = selectedCategory,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Category") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded)
-                    },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                )
-
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = {
-                        expanded = false
-                    }
-                ) {
-
-                    categories.forEach { category ->
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(category)
-                            },
-                            onClick = {
-                                selectedCategory = category
-                                expanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            OutlinedTextField(
-                value = brand,
-                onValueChange = { brand = it },
-                label = { Text("Brand") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = color,
-                onValueChange = { color = it },
-                label = { Text("Color") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Notes") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
-            )
+            ClothingItemFormFields(formState)
 
             Button(
                 onClick = {
-                    // Save item to database
-                    val item = ClothingItem(
-                        id = System.currentTimeMillis(),
-                        name = itemName,
-                        category = selectedCategory,
-                        brand = brand,
-                        color = color,
-                        description = description,
-                        imageUri = imageUri?.toString()
+                    // Save item to database, carrying forward system-managed wear-tracking fields
+                    val item = formState.toClothingItem(
+                        id = itemId,
+                        imagePath = imageUri?.toString() ?: "",
+                        timesWorn = item?.timesWorn ?: 0,
+                        lastWornDate = item?.lastWornDate,
+                        dateAdded = item?.dateAdded ?: System.currentTimeMillis()
                     )
-
-                    //onSaveItem(item)
+                    viewModel.addItem(item)
+                    onExitClick()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

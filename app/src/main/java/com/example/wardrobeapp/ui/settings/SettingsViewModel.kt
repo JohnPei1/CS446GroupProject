@@ -1,6 +1,7 @@
 package com.example.wardrobeapp.ui.settings
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -8,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.wardrobeapp.data.local.ai.LlmModelManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,9 +30,11 @@ private object PrefKeys {
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
+    private val llmModelManager: LlmModelManager,
     private val context: Context
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState(isLoading = true))
+        private val _isAiModelAvailable = MutableStateFlow(llmModelManager.isModelAvailable())
 
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
@@ -48,15 +52,43 @@ class SettingsViewModel(
             val locationFlow = context.dataStore.data
                 .map { it[PrefKeys.LOCATION] ?: "" }
 
-            combine(darkModeFlow, unitFlow, locationFlow) { dark, unit, loc ->
+            combine(darkModeFlow, unitFlow, locationFlow, settingsRepository.isAiEnabled, _isAiModelAvailable) {
+                dark, unit, loc, aiEnabled, aiModelAvailable ->
                 SettingsUiState(
                     isDarkMode = dark,
                     unitSystem = unit,
                     location = loc,
+                    isAiEnabled = aiEnabled,
+                    isAiModelAvailable = aiModelAvailable,
                     isLoading = false
                 )
             }.collect { _uiState.value = it }
         }
+    }
+
+    fun onAiEnabledToggled(enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching { settingsRepository.setAiEnabled(enabled) }
+                .onFailure { setError("Couldn't save AI setting") }
+        }
+    }
+
+    /** Copies a user-picked .task model file into app storage. No network access. */
+    fun importAiModel(uri: Uri) {
+        viewModelScope.launch {
+            llmModelManager.importModel(uri)
+                .onSuccess { _isAiModelAvailable.value = true }
+                .onFailure {
+                    _isAiModelAvailable.value = false
+                    setError(it.message ?: "Couldn't import the AI model file")
+                }
+        }
+    }
+
+    fun deleteAiModel() {
+        llmModelManager.deleteModel()
+        _isAiModelAvailable.value = false
+        onAiEnabledToggled(false)
     }
 
     fun onDarkModeToggled(enabled: Boolean) {
@@ -100,6 +132,7 @@ class SettingsViewModel(
                         val container = (context.applicationContext as WardrobeApplication).container
                         return SettingsViewModel(
                             settingsRepository = container.settingsRepository,
+                            llmModelManager = container.llmModelManager,
                             context = context.applicationContext
                         ) as T
                 }

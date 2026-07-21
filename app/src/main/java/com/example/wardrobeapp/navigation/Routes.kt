@@ -9,7 +9,9 @@ sealed class Screen(val route: String) {
     object EditItem : Screen("edit_item/{itemId}") {
         fun createRoute(itemId: String) = "edit_item/$itemId"
     }
-    object OutfitGenerator : Screen("outfit_generator")
+    object OutfitGenerator : Screen("outfit_generator?date={date}") {
+        fun createRoute(date: Long? = null) = if (date != null) "outfit_generator?date=$date" else "outfit_generator"
+    }
     object Calendar : Screen("calendar")
     object Settings : Screen("settings")
 }

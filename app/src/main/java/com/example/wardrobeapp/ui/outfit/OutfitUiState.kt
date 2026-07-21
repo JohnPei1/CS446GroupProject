@@ -4,5 +4,6 @@ import com.example.wardrobeapp.domain.model.Outfit
 
 data class OutfitUiState(
     val generatedOutfit: Outfit? = null,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val error: String? = null
 )

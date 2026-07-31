@@ -1,0 +1,20 @@
+# Project 2 Week 8 Update
+
+June 18 - June 25
+
+- All members discussed and worked on the prototype plan
+
+Update from Devrim:
+- Database Live: Fully integrated the Room database. The app now correctly saves and deletes clothing items locally.
+- Expanded Data: Added support for Brand, Color, and Notes to the database and UI. Every field now persists and pre-fills correctly when you edit an item.
+- Dynamic Outfits: The Outfit Generator is now hooked up to the database. It only generates outfits using items you've actually added.
+- UI Polish: Added the missing Accessories filter to the Wardrobe.
+- Filmed demo video
+
+Update from Hermela: 
+- finished implementing edit screen
+- merged add item and edit item features into main
+
+Update from Jaskomal:
+- Finished implementation of  outfit generation feature, including WeatherAware
+- Worked on my slide/section of the presentation (describing the user scenario)

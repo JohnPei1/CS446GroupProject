@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -55,6 +54,7 @@ import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.TagOptions
+import com.example.wardrobeapp.util.DateUtils
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -73,17 +73,15 @@ fun OutfitGeneratorScreen(
     var userPrompt by remember { mutableStateOf("") }
     var optionsExpanded by remember { mutableStateOf(true) }
 
+    val effectiveDate = date ?: remember { DateUtils.getTodayUtcMidnight() }
+
     fun generateAndCollapse() {
         optionsExpanded = false
         viewModel.generate(weatherAware, selectedOccasion, userPrompt)
     }
 
-    LaunchedEffect(date) {
-        if (date != null) {
-            viewModel.loadPlannedOutfit(date)
-        } else {
-            viewModel.loadPlannedOutfit(System.currentTimeMillis())
-        }
+    LaunchedEffect(effectiveDate) {
+        viewModel.loadPlannedOutfit(effectiveDate)
     }
 
     Column(
@@ -97,7 +95,7 @@ fun OutfitGeneratorScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (date != null) "Outfit for ${formatDateLong(date)}" else "Outfit Generator",
+                text = if (date != null) "Outfit for ${formatDateLong(effectiveDate)}" else "Outfit Generator",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
             )
             TextButton(onClick = { optionsExpanded = !optionsExpanded }) {
@@ -213,7 +211,7 @@ fun OutfitGeneratorScreen(
                     Text("Try Again")}
 
                 Button(
-                    onClick = { viewModel.save() },
+                    onClick = { viewModel.save(effectiveDate) },
                     enabled = !uiState.isLoading,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -288,38 +286,6 @@ private fun OutfitResult(outfit: Outfit) {
                 items(outfit.items, key = { it.id }) { item ->
                     OutfitItemRow(item)
                 } } } } }
-
-@Composable
-private fun OutfitItemRow(item: ClothingItem) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth() ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp)
-        ) {
-            AsyncImage(
-                model = item.imagePath,
-                contentDescription = item.name,
-                contentScale = ContentScale.Crop,
-                error = painterResource(android.R.drawable.ic_menu_gallery),
-                placeholder = painterResource(android.R.drawable.ic_menu_gallery),
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(
-                    item.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-                Text(
-                    item.category,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.secondary
-                ) } } } }
 
 private fun formatDateLong(date: Long): String {
     val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())

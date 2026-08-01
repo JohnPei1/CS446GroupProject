@@ -17,6 +17,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.WeatherInfo
 import com.example.wardrobeapp.ui.outfit.OutfitItemRow
+import com.example.wardrobeapp.util.DateUtils
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -141,11 +142,22 @@ fun SelectedDateDetails(
                 OutfitItemRow(item = item)
                 Spacer(modifier = Modifier.height(8.dp))
             }
+            if (DateUtils.normalizeDate(date) >= DateUtils.getTodayUtcMidnight()) {
+                OutlinedButton(
+                    onClick = onPlanOutfit,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Change Outfit")
+                }
+            }
         } else {
             Text("No outfit planned for this day.")
             Spacer(modifier = Modifier.height(8.dp))
-            if (normalizeDate(date) >= normalizeDate(System.currentTimeMillis())) {
-                Button(onClick = onPlanOutfit) {
+            if (DateUtils.normalizeDate(date) >= DateUtils.getTodayUtcMidnight()) {
+                Button(
+                    onClick = onPlanOutfit,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text("Plan Outfit")
                 }
             }
@@ -163,14 +175,4 @@ fun formatDateLong(date: Long): String {
     val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
     sdf.timeZone = TimeZone.getTimeZone("UTC")
     return sdf.format(Date(date))
-}
-
-private fun normalizeDate(timeInMillis: Long): Long {
-    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-    calendar.timeInMillis = timeInMillis
-    calendar.set(Calendar.HOUR_OF_DAY, 0)
-    calendar.set(Calendar.MINUTE, 0)
-    calendar.set(Calendar.SECOND, 0)
-    calendar.set(Calendar.MILLISECOND, 0)
-    return calendar.timeInMillis
 }

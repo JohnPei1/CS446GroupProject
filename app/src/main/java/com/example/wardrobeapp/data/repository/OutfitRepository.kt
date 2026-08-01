@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
  */
 interface OutfitRepository {
     fun getAllOutfits(): Flow<List<Outfit>>
-    suspend fun saveOutfit(outfit: Outfit)
+    suspend fun saveOutfit(outfit: Outfit): Long
     suspend fun scheduleOutfit(outfitId: Long, date: Long)
-    suspend fun getScheduledOutfit(date: Long): Outfit?
+    fun getScheduledOutfit(date: Long): Flow<Outfit?>
 }

@@ -18,14 +18,13 @@ import com.example.wardrobeapp.domain.strategy.IncompleteOutfitException
 import com.example.wardrobeapp.domain.strategy.OutfitStrategy
 import com.example.wardrobeapp.domain.strategy.SimpleOutfitStrategy
 import com.example.wardrobeapp.domain.strategy.WeatherAwareOutfitStrategy
+import com.example.wardrobeapp.util.DateUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.Calendar
-import java.util.TimeZone
 
 class OutfitViewModel(
     private val outfitRepository: OutfitRepository,
@@ -44,22 +43,12 @@ class OutfitViewModel(
 
     fun loadPlannedOutfit(date: Long) {
         viewModelScope.launch {
-            val normalizedDate = normalizeDate(date)
-            val planned = outfitRepository.getScheduledOutfit(normalizedDate)
+            val normalizedDate = DateUtils.normalizeDate(date)
+            val planned = outfitRepository.getScheduledOutfit(normalizedDate).first()
             if (planned != null) {
                 _uiState.value = _uiState.value.copy(generatedOutfit = planned)
             }
         }
-    }
-
-    private fun normalizeDate(timeInMillis: Long): Long {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        calendar.timeInMillis = timeInMillis
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
     }
 
     /** Generates a new outfit, factors in the weather, occasion, and free-text prompt if given. */
@@ -96,11 +85,6 @@ class OutfitViewModel(
             }
         } }
 
-    /**
-     * Attempts an on-device AI outfit when the user has opted in and imported a model. AI
-     * failures/timeouts are swallowed here -- generation always falls back to the deterministic
-     * strategy rather than blocking on AI availability.
-     */
     private suspend fun tryAiOutfit(items: List<ClothingItem>, constraints: OutfitConstraints): Outfit? {
         val aiEnabled = settingsRepository.isAiEnabled.first()
         if (!aiEnabled || !llmModelManager.isModelAvailable()) return null
@@ -115,8 +99,14 @@ class OutfitViewModel(
         generate(weatherAware, occasion, userPrompt)
 
     /** Pushes current outfit. */
-    fun save() {
-        // No-op for now as per user request
+    fun save(date: Long? = null) {
+        val outfit = _uiState.value.generatedOutfit ?: return
+        viewModelScope.launch {
+            val outfitId = outfitRepository.saveOutfit(outfit)
+            if (date != null) {
+                outfitRepository.scheduleOutfit(outfitId, date)
+            }
+        }
     }
 
     /** Records the currently generated outfit's items as worn, for anti-repetition scoring. */
@@ -128,7 +118,6 @@ class OutfitViewModel(
     }
 
     companion object {
-        // Placeholder coordinates
         private const val DEFAULT_LAT = 43.46
         private const val DEFAULT_LON = -80.52
         private const val AI_TIMEOUT_MS = 20_000L

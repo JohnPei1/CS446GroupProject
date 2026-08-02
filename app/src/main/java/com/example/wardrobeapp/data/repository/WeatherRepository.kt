@@ -54,12 +54,13 @@ class WeatherRepository {
         val response: WeatherDto = apiService.getWeather(lat, lon);
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
         val weatherMap = mutableMapOf<Long, WeatherInfo>()
+        val today = getTodayUtcMidnight()
 
-        weatherMap[normalizeDate(System.currentTimeMillis())] = WeatherInfo(
+        weatherMap[today] = WeatherInfo(
             temperature = response.daily.temperatureMax[0],
             condition = fromWmoCode(response.daily.weatherCode[0])
         )
-        calendar.setTimeInMillis(normalizeDate(System.currentTimeMillis()))
+        calendar.setTimeInMillis(today)
         for (i in 1..6){
             calendar.add(Calendar.DAY_OF_YEAR, 1)
             val futureDate = normalizeDate(calendar.timeInMillis)
@@ -81,7 +82,19 @@ class WeatherRepository {
         return calendar.timeInMillis
     }
 
-    fun fromWmoCode(code: Int): String {
+    private fun getTodayUtcMidnight(): Long {
+        val calendar = Calendar.getInstance()
+        val year = calendar.get(Calendar.YEAR)
+        val month = calendar.get(Calendar.MONTH)
+        val date = calendar.get(Calendar.DATE)
+
+        val utcCalendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        utcCalendar.clear()
+        utcCalendar.set(year, month, date)
+        return utcCalendar.timeInMillis
+    }
+
+    private fun fromWmoCode(code: Int): String {
         return when (code) {
             0 -> "Sunny"
             1 -> "Mainly Sunny"

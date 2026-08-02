@@ -9,8 +9,11 @@ interface OutfitDao {
     @Query("SELECT * FROM outfits")
     fun getAllOutfits(): Flow<List<OutfitEntity>>
 
+    @Query("SELECT * FROM outfits WHERE id = :id")
+    suspend fun getOutfitById(id: Long): OutfitEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(outfit: OutfitEntity)
+    suspend fun insert(outfit: OutfitEntity): Long
 
     @Delete
     suspend fun delete(outfit: OutfitEntity)

@@ -1,73 +1,78 @@
 package com.example.wardrobeapp.data.repository
 
+import com.example.wardrobeapp.data.local.dao.ClothingItemDao
 import com.example.wardrobeapp.data.local.dao.OutfitDao
+import com.example.wardrobeapp.data.local.dao.ScheduledOutfitDao
 import com.example.wardrobeapp.data.local.entity.OutfitEntity
-import com.example.wardrobeapp.domain.model.ClothingItem
+import com.example.wardrobeapp.data.local.entity.ScheduledOutfitEntity
 import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.util.DateUtils
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import java.util.Calendar
-import java.util.TimeZone
 
-class OfflineOutfitRepository(private val outfitDao: OutfitDao) : OutfitRepository {
+class OfflineOutfitRepository(
+    private val outfitDao: OutfitDao,
+    private val scheduledOutfitDao: ScheduledOutfitDao,
+    private val clothingItemDao: ClothingItemDao
+) : OutfitRepository {
     override fun getAllOutfits(): Flow<List<Outfit>> {
-        // Simple mapping for the prototype. In a real app, we'd fetch items from ClothingItemDao
         return outfitDao.getAllOutfits().map { entities ->
-            entities.map { it.toDomainModel() }
+            entities.map { it.toDomainModel(emptyList()) }
         }
     }
 
-    override suspend fun saveOutfit(outfit: Outfit) {
-        outfitDao.insert(outfit.toEntity())
+    override suspend fun saveOutfit(outfit: Outfit): Long {
+        return outfitDao.insert(outfit.toEntity())
     }
 
     override suspend fun scheduleOutfit(outfitId: Long, date: Long) {
-        // Implementation for scheduling will go here (John's task)
+        val normalizedDate = DateUtils.normalizeDate(date)
+        // First delete any existing schedule for this date to ensure override
+        scheduledOutfitDao.deleteByDate(normalizedDate)
+        scheduledOutfitDao.insert(
+            ScheduledOutfitEntity(
+                outfitId = outfitId,
+                date = normalizedDate
+            )
+        )
     }
 
-    override suspend fun getScheduledOutfit(date: Long): Outfit? {
-        // Mocking for prototype: return an outfit if today or yesterday
-        val normalizedDate = normalizeDate(date)
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        val today = normalizeDate(System.currentTimeMillis())
-        
-        calendar.setTimeInMillis(today)
-        calendar.add(Calendar.DAY_OF_YEAR, -1)
-        val yesterday = normalizeDate(calendar.timeInMillis)
-
-        return when (normalizedDate) {
-            today -> Outfit(1, "Today's Outfit", listOf(
-                ClothingItem(1, "Blue T-Shirt", "Tops", ""),
-                ClothingItem(2, "Jeans", "Bottoms", "")
-            ))
-            yesterday -> Outfit(2, "Yesterday's Outfit", listOf(
-                ClothingItem(3, "White Shirt", "Tops", ""),
-                ClothingItem(4, "Chinos", "Bottoms", "")
-            ))
-            else -> null
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getScheduledOutfit(date: Long): Flow<Outfit?> {
+        val normalizedDate = DateUtils.normalizeDate(date)
+        return scheduledOutfitDao.getScheduledOutfitByDateFlow(normalizedDate).flatMapLatest { scheduled ->
+            flow {
+                if (scheduled != null) {
+                    val entity = outfitDao.getOutfitById(scheduled.outfitId)
+                    if (entity != null) {
+                        val itemIds = entity.clothingItemIds.split(",")
+                            .filter { it.isNotBlank() }
+                            .map { it.toLong() }
+                        val itemEntities = clothingItemDao.getItemsByIds(itemIds)
+                        emit(entity.toDomainModel(itemEntities.map { it.toDomainModel() }))
+                    } else {
+                        emit(null)
+                    }
+                } else {
+                    emit(null)
+                }
+            }
         }
-    }
-
-    private fun normalizeDate(timeInMillis: Long): Long {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        calendar.timeInMillis = timeInMillis
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
     }
 }
 
 // Extension functions for mapping
-fun OutfitEntity.toDomainModel(): Outfit = Outfit(
+fun OutfitEntity.toDomainModel(items: List<com.example.wardrobeapp.domain.model.ClothingItem>): Outfit = Outfit(
     id = id,
     name = name,
-    items = emptyList() // Simplified for prototype
+    items = items
 )
 
 fun Outfit.toEntity(): OutfitEntity = OutfitEntity(
-    id = id,
+    id = if (id == 0L) 0 else id, // Let Room auto-generate if 0
     name = name,
     clothingItemIds = items.joinToString(",") { it.id.toString() }
 )

@@ -36,11 +36,15 @@ class AppDataContainer(private val context: Context) : AppContainer {
     }
 
     override val outfitRepository: OutfitRepository by lazy {
-        OfflineOutfitRepository(database.outfitDao())
+        OfflineOutfitRepository(
+            database.outfitDao(),
+            database.scheduledOutfitDao(),
+            database.clothingItemDao()
+        )
     }
 
     override val weatherRepository: WeatherRepository by lazy {
-        OfflineWeatherRepository()
+        WeatherRepository()
     }
 
     override val settingsRepository: SettingsRepository by lazy {

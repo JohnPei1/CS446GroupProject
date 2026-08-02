@@ -1,5 +1,6 @@
 package com.example.wardrobeapp.data.remote
 
+import com.google.gson.annotations.SerializedName
 import kotlinx.serialization.Serializable
 
 /**
@@ -7,11 +8,23 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class WeatherDto(
-    val current_weather: CurrentWeatherDto
+    val daily: DailyWeatherDto,
+    val current: CurrentWeatherDto
 )
 
 @Serializable
-data class CurrentWeatherDto(
-    val temperature: Double,
-    val weathercode: Int
+data class DailyWeatherDto(
+    @SerializedName("temperature_2m_max")
+    val temperatureMax: Array <Double>,
+    @SerializedName("weather_code")
+    val weatherCode: Array<Int>
 )
+
+@Serializable
+data class CurrentWeatherDto (
+    @SerializedName("temperature_2m")
+    val temperature: Double,
+    @SerializedName("weather_code")
+    val weatherCode: Int
+)
+

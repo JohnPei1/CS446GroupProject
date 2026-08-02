@@ -4,7 +4,6 @@ import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.OutfitConstraints
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -31,14 +30,28 @@ class SimpleOutfitStrategyTest {
     fun generateOutfit_noteReflectsRequestedOccasion() = runBlocking {
         val wardrobe = listOf(item(1, Category.TOPS), item(2, Category.BOTTOMS), item(3, Category.FOOTWEAR))
         val outfit = SimpleOutfitStrategy().generateOutfit(wardrobe, OutfitConstraints(occasion = "Workout"))
-        assertEquals("Matched: Workout", outfit.note)
+        assertTrue(outfit.note?.contains("Workout") == true)
     }
 
     @Test
-    fun generateOutfit_noteIsNullWithNoOccasion() = runBlocking {
+    fun generateOutfit_noteFallsBackToGenericExplanationWithNoOccasion() = runBlocking {
+        // An outfit should never be shown with no explanation at all -- even with no occasion/
+        // weather/prompt signal, there should be some rationale text.
         val wardrobe = listOf(item(1, Category.TOPS), item(2, Category.BOTTOMS), item(3, Category.FOOTWEAR))
         val outfit = SimpleOutfitStrategy().generateOutfit(wardrobe, OutfitConstraints())
-        assertNull(outfit.note)
+        assertTrue(outfit.note?.isNotBlank() == true)
+    }
+
+    @Test
+    fun generateOutfit_includesAccessoryOnlyWhenPromptMatches() = runBlocking {
+        val chain = ClothingItem(id = 5, name = "Gold Chain", category = Category.ACCESSORIES, imagePath = "", color = "Gold")
+        val wardrobe = listOf(item(1, Category.TOPS), item(2, Category.BOTTOMS), chain)
+
+        val withoutPrompt = SimpleOutfitStrategy().generateOutfit(wardrobe, OutfitConstraints())
+        assertTrue(withoutPrompt.items.none { it.category == Category.ACCESSORIES })
+
+        val withPrompt = SimpleOutfitStrategy().generateOutfit(wardrobe, OutfitConstraints(userPrompt = "Using gold chain"))
+        assertTrue(withPrompt.items.any { it.id == chain.id })
     }
 
     @Test

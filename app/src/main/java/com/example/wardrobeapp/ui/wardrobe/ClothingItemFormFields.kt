@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.TagOptions
+import com.example.wardrobeapp.domain.model.WarmthLevels
 
 /** Mutable form state for the fields shared by AddItemScreen and EditItemScreen. */
 class ClothingItemFormState {
@@ -188,6 +189,13 @@ fun ClothingItemFormFields(state: ClothingItemFormState) {
                 )
             }
         }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Best for ${WarmthLevels.temperatureRangeLabel(state.warmthLevel)} — the outfit " +
+                "generator matches this to the forecast",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 
     Row(

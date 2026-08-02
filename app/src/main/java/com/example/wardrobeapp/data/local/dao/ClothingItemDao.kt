@@ -13,7 +13,7 @@ interface ClothingItemDao {
     fun getItem(id: Long): Flow<ClothingItemEntity?>
 
     @Query("SELECT * FROM clothing_items WHERE id IN (:ids)")
-    suspend fun getItemsByIds(ids: List<Long>): List<ClothingItemEntity>
+    suspend fun getByIds(ids: List<Long>): List<ClothingItemEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: ClothingItemEntity)

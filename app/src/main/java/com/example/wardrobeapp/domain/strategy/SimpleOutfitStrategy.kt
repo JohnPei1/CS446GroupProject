@@ -27,8 +27,8 @@ class SimpleOutfitStrategy : OutfitStrategy {
         if (missing.isNotEmpty()) throw IncompleteOutfitException(missing)
 
         OutfitScorer.pickBest(items, Category.FOOTWEAR, constraints, selected)?.let { selected.add(it) }
+        OutfitScorer.matchedAccessory(items, constraints)?.let { selected.add(it) }
 
-        val note = constraints.occasion?.let { "Matched: $it" }
-        return Outfit(name = "Everyday Outfit", items = selected, note = note)
+        return Outfit(name = "Everyday Outfit", items = selected, note = OutfitScorer.buildNote(constraints))
     }
 }

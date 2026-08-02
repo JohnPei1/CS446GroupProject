@@ -10,8 +10,9 @@ interface OutfitDao {
     fun getAllOutfits(): Flow<List<OutfitEntity>>
 
     @Query("SELECT * FROM outfits WHERE id = :id")
-    suspend fun getOutfitById(id: Long): OutfitEntity?
+    suspend fun getById(id: Long): OutfitEntity?
 
+    /** Returns the row id, so callers can schedule a freshly saved outfit. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(outfit: OutfitEntity): Long
 

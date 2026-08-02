@@ -7,5 +7,6 @@ data class Outfit(
     val id: Long = 0,
     val name: String,
     val items: List<ClothingItem>,
-    val note: String? = null
+    val note: String? = null,
+    val isAiGenerated: Boolean = false
 )

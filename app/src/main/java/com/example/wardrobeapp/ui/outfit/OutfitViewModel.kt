@@ -13,10 +13,13 @@ import com.example.wardrobeapp.data.repository.WeatherRepository
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.OutfitConstraints
+import com.example.wardrobeapp.domain.model.WeatherInfo
 import com.example.wardrobeapp.domain.strategy.AiOutfitStrategy
 import com.example.wardrobeapp.domain.strategy.IncompleteOutfitException
 import com.example.wardrobeapp.domain.strategy.OutfitStrategy
 import com.example.wardrobeapp.domain.strategy.SimpleOutfitStrategy
+import com.example.wardrobeapp.domain.strategy.WardrobeGapChecker
+import com.example.wardrobeapp.domain.strategy.WardrobeGapException
 import com.example.wardrobeapp.domain.strategy.WeatherAwareOutfitStrategy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,8 +27,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.Calendar
-import java.util.TimeZone
 
 class OutfitViewModel(
     private val outfitRepository: OutfitRepository,
@@ -43,32 +44,21 @@ class OutfitViewModel(
     private val aiStrategy: OutfitStrategy = AiOutfitStrategy(llmModelManager)
 
     // Session-only (not persisted): the previous generation's item ids, so repeatedly hitting
-    // "Try Again" actually rotates through different combinations instead of re-picking the same
-    // top-scoring items every time when there's no other distinguishing signal.
+    // "Generate Another" actually rotates through different combinations instead of re-picking
+    // the same top-scoring items every time when there's no other distinguishing signal.
     private var recentItemIds: Set<Long> = emptySet()
 
-    fun loadPlannedOutfit(date: Long) {
-        viewModelScope.launch {
-            val normalizedDate = normalizeDate(date)
-            val planned = outfitRepository.getScheduledOutfit(normalizedDate)
-            if (planned != null) {
-                _uiState.value = _uiState.value.copy(generatedOutfit = planned, isPlanned = true)
-            }
-        }
-    }
-
-    private fun normalizeDate(timeInMillis: Long): Long {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        calendar.timeInMillis = timeInMillis
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
-    }
-
-    /** Generates a new outfit, factors in the weather, occasion, and free-text prompt if given. */
-    fun generate(weatherAware: Boolean = true, occasion: String? = null, userPrompt: String? = null) {
+    /**
+     * Generates a new outfit, factors in the weather, occasion, and free-text prompt if given.
+     * When [date] is a future day (planning from the calendar), that day's forecast is used
+     * instead of the current conditions; beyond the forecast window, weather is skipped.
+     */
+    fun generate(
+        weatherAware: Boolean = true,
+        occasion: String? = null,
+        userPrompt: String? = null,
+        date: Long? = null
+    ) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val items = wardrobeRepository.getAllItems().first()
@@ -83,7 +73,7 @@ class OutfitViewModel(
             }
 
             val weather = if (weatherAware) {
-                runCatching { weatherRepository.getCurrentWeather(DEFAULT_LAT, DEFAULT_LON) }.getOrNull()
+                runCatching { fetchWeatherFor(date) }.getOrNull()
             } else null
             val constraints = OutfitConstraints(
                 weather = weather,
@@ -91,6 +81,24 @@ class OutfitViewModel(
                 userPrompt = userPrompt,
                 recentItemIds = recentItemIds
             )
+
+            // Refuse honestly instead of dressing the user in something unsuitable: a Swim
+            // occasion with no swimwear, or -30°C with only summer clothes, is a wardrobe gap
+            // to fix, not something to paper over with a "normal" outfit. This check is
+            // deterministic so it protects users without the AI model too.
+            val gaps = WardrobeGapChecker.findGaps(items, constraints)
+            if (gaps.isNotEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    generatedOutfit = null,
+                    isLoading = false,
+                    error = null,
+                    wardrobeGap = gaps.joinToString("\n\n"),
+                    lastWeatherUsed = weather,
+                    weatherUnavailable = weatherAware && weather == null
+                )
+                return@launch
+            }
+
             val fallbackStrategy = if (weatherAware) weatherAwareStrategy else simpleStrategy
 
             try {
@@ -100,18 +108,51 @@ class OutfitViewModel(
                     generatedOutfit = outfit,
                     isLoading = false,
                     error = null,
-                    isPlanned = false,
+                    wardrobeGap = null,
+                    lastWeatherUsed = weather,
+                    weatherUnavailable = weatherAware && weather == null,
+                    saved = false,
+                    scheduledFor = null,
+                    pendingSchedule = null
+                )
+            } catch (e: WardrobeGapException) {
+                // The AI judged the request unsatisfiable (e.g. a typed "going swimming" that
+                // the deterministic pre-check can't understand).
+                _uiState.value = _uiState.value.copy(
+                    generatedOutfit = null,
+                    isLoading = false,
+                    error = null,
+                    wardrobeGap = e.gaps.joinToString("\n\n"),
                     lastWeatherUsed = weather
                 )
             } catch (e: IncompleteOutfitException) {
                 _uiState.value = _uiState.value.copy(
                     generatedOutfit = null,
                     isLoading = false,
+                    wardrobeGap = null,
                     error = "Add at least one item to: ${e.missingCategories.joinToString(" and ")}. " +
                         "A complete outfit needs a top and a bottom."
                 )
             }
         } }
+
+    /**
+     * Current weather for today (or no date), or the target day's forecast when planning ahead.
+     * Uses the location saved in Settings, falling back to the app default. Returns null when
+     * the date is past the 7-day forecast window -- generation then runs without weather.
+     */
+    private suspend fun fetchWeatherFor(date: Long?): WeatherInfo? {
+        val location = settingsRepository.savedLocation.first()
+        val lat = location?.latitude ?: DEFAULT_LAT
+        val lon = location?.longitude ?: DEFAULT_LON
+        val target = date?.let(::normalizeToUtcDay)
+        val today = normalizeToUtcDay(System.currentTimeMillis())
+        return if (target == null || target == today) {
+            weatherRepository.getCurrentWeather(lat, lon)
+        } else {
+            weatherRepository.getForecastOneWeek(lat, lon)[target]
+        }
+    }
 
     /**
      * Attempts an on-device AI outfit when the user has opted in and imported a model. AI
@@ -121,31 +162,106 @@ class OutfitViewModel(
     private suspend fun tryAiOutfit(items: List<ClothingItem>, constraints: OutfitConstraints): Outfit? {
         val aiEnabled = settingsRepository.isAiEnabled.first()
         if (!aiEnabled || !llmModelManager.isModelAvailable()) return null
-        val outfit = runCatching {
+        val outfit = try {
             withTimeoutOrNull(AI_TIMEOUT_MS) { aiStrategy.generateOutfit(items, constraints) }
-        }.getOrNull()
+        } catch (e: WardrobeGapException) {
+            // A deliberate "the wardrobe can't satisfy this" verdict, not an AI failure --
+            // let it surface instead of silently falling back to a normal outfit.
+            throw e
+        } catch (e: Exception) {
+            null
+        }
         return outfit?.takeIf { it.items.isNotEmpty() }
     }
 
-    /** Re-try. */
-    fun retry(weatherAware: Boolean = true, occasion: String? = null, userPrompt: String? = null) =
-        generate(weatherAware, occasion, userPrompt)
-
-    /** Pushes current outfit. */
+    /** Saves the currently shown outfit to My Outfits. */
     fun save() {
-        // No-op for now as per user request
-    }
-
-    /** Records the currently generated outfit's items as worn, for anti-repetition scoring. */
-    fun markWorn() {
         val outfit = _uiState.value.generatedOutfit ?: return
+        if (_uiState.value.saved) return
         viewModelScope.launch {
-            wardrobeRepository.markItemsWorn(outfit.items.map { it.id })
+            runCatching { ensureSaved(outfit) }
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(userMessage = "Saved to My Outfits.")
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(userMessage = "Couldn't save the outfit.")
+                }
         }
     }
 
+    /**
+     * Plans the current outfit for [date]. If that day already has an outfit, the request is
+     * parked in [OutfitUiState.pendingSchedule] for the user to confirm the replacement.
+     */
+    fun requestSchedule(date: Long) {
+        if (_uiState.value.generatedOutfit == null) return
+        viewModelScope.launch {
+            val day = normalizeToUtcDay(date)
+            val existing = runCatching { outfitRepository.getScheduledOutfit(day) }.getOrNull()
+            if (existing != null) {
+                _uiState.value = _uiState.value.copy(
+                    pendingSchedule = PendingSchedule(day, existing.name)
+                )
+            } else {
+                performSchedule(day)
+            }
+        }
+    }
+
+    fun confirmPendingSchedule() {
+        val pending = _uiState.value.pendingSchedule ?: return
+        _uiState.value = _uiState.value.copy(pendingSchedule = null)
+        viewModelScope.launch { performSchedule(pending.date) }
+    }
+
+    fun dismissPendingSchedule() {
+        _uiState.value = _uiState.value.copy(pendingSchedule = null)
+    }
+
+    /**
+     * Scheduling implies saving (a plan references a saved outfit). Wearing it today also
+     * records the items as worn, which feeds the anti-repetition scoring.
+     */
+    private suspend fun performSchedule(day: Long) {
+        val outfit = _uiState.value.generatedOutfit ?: return
+        runCatching {
+            val id = ensureSaved(outfit)
+            outfitRepository.scheduleOutfit(id, day)
+            val isToday = day == normalizeToUtcDay(System.currentTimeMillis())
+            if (isToday) wardrobeRepository.markItemsWorn(outfit.items.map { it.id })
+            isToday
+        }.onSuccess { isToday ->
+            _uiState.value = _uiState.value.copy(
+                scheduledFor = day,
+                userMessage = if (isToday) {
+                    "Planned for today — items marked as worn."
+                } else {
+                    "Planned for ${planDateLabel(day)}."
+                }
+            )
+        }.onFailure {
+            _uiState.value = _uiState.value.copy(userMessage = "Couldn't plan the outfit.")
+        }
+    }
+
+    /** Saves the outfit if it isn't persisted yet, updating state with the assigned id. */
+    private suspend fun ensureSaved(outfit: Outfit): Long {
+        if (outfit.id != 0L && _uiState.value.saved) return outfit.id
+        val id = outfitRepository.saveOutfit(outfit)
+        _uiState.value = _uiState.value.copy(
+            generatedOutfit = outfit.copy(id = id),
+            saved = true
+        )
+        return id
+    }
+
+    /** Clears the one-shot snackbar message after the UI has shown it. */
+    fun consumeMessage() {
+        _uiState.value = _uiState.value.copy(userMessage = null)
+    }
+
     companion object {
-        // Placeholder coordinates
+        // Fallback coordinates (Waterloo, ON) when no location is saved in Settings
         private const val DEFAULT_LAT = 43.46
         private const val DEFAULT_LON = -80.52
         private const val AI_TIMEOUT_MS = 20_000L

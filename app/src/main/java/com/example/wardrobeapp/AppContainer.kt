@@ -2,11 +2,14 @@ package com.example.wardrobeapp
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.wardrobeapp.data.local.AppDatabase
 import com.example.wardrobeapp.data.local.ai.LlmModelManager
 import com.example.wardrobeapp.data.repository.*
+import com.example.wardrobeapp.domain.model.SavedLocation
 import kotlinx.coroutines.flow.map
 
 /**
@@ -36,7 +39,11 @@ class AppDataContainer(private val context: Context) : AppContainer {
     }
 
     override val outfitRepository: OutfitRepository by lazy {
-        OfflineOutfitRepository(database.outfitDao())
+        OfflineOutfitRepository(
+            database.outfitDao(),
+            database.clothingItemDao(),
+            database.scheduledOutfitDao()
+        )
     }
 
     override val weatherRepository: WeatherRepository by lazy {
@@ -58,6 +65,24 @@ class AppDataContainer(private val context: Context) : AppContainer {
             }
             override suspend fun setAiEnabled(enabled: Boolean) {
                 context.dataStore.edit { it[AI_ENABLED] = enabled }
+            }
+
+            private val LOCATION_NAME = stringPreferencesKey("location")
+            private val LOCATION_LAT = doublePreferencesKey("location_lat")
+            private val LOCATION_LON = doublePreferencesKey("location_lon")
+            override val savedLocation = context.dataStore.data.map { prefs ->
+                val name = prefs[LOCATION_NAME]
+                val lat = prefs[LOCATION_LAT]
+                val lon = prefs[LOCATION_LON]
+                if (name.isNullOrBlank() || lat == null || lon == null) null
+                else SavedLocation(name, lat, lon)
+            }
+            override suspend fun setLocation(location: SavedLocation) {
+                context.dataStore.edit {
+                    it[LOCATION_NAME] = location.name
+                    it[LOCATION_LAT] = location.latitude
+                    it[LOCATION_LON] = location.longitude
+                }
             }
         }
     }

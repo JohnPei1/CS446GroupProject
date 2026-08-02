@@ -10,8 +10,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Checkroom
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,7 +27,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.ui.wardrobe.CATEGORIES
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,15 +37,45 @@ fun ManualOutfitScreen(
     )
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    // Leave the screen
-    LaunchedEffect(uiState.isSaved) {
-        if (uiState.isSaved) onExitClick()
+    var showWearOptions by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    // Leave the screen once the outfit is saved or planned; the result shows up in My Outfits.
+    LaunchedEffect(uiState.isDone) {
+        if (uiState.isDone) onExitClick()
+    }
+
+    if (showWearOptions) {
+        WearOptionsDialog(
+            outfitName = uiState.outfitName.trim().ifBlank { "My Outfit" },
+            onWearToday = {
+                showWearOptions = false
+                viewModel.requestSchedule(System.currentTimeMillis())
+            },
+            onPickDate = {
+                showWearOptions = false
+                showDatePicker = true
+            },
+            onDismiss = { showWearOptions = false }
+        )
+    }
+    if (showDatePicker) {
+        PlanDatePickerDialog(
+            onDismiss = { showDatePicker = false },
+            onPick = { picked ->
+                showDatePicker = false
+                viewModel.requestSchedule(picked)
+            }
+        )
+    }
+    uiState.pendingSchedule?.let { pending ->
+        ReplacePlanDialog(
+            pending = pending,
+            onConfirm = viewModel::confirmPendingSchedule,
+            onDismiss = viewModel::dismissPendingSchedule
+        )
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Create Outfit") },
@@ -114,49 +144,49 @@ fun ManualOutfitScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+            Text(
+                text = selectionSummary(uiState.selectedItems),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(Modifier.height(8.dp))
+            val hasSelection = uiState.selectedItemIds.isNotEmpty()
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = selectionSummary(uiState.selectedItems),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                OutlinedButton(
+                    onClick = viewModel::clearSelection,
+                    enabled = hasSelection,
                     modifier = Modifier.weight(1f)
-                )
-                if (uiState.selectedItemIds.isNotEmpty()) {
-                    TextButton(onClick = viewModel::clearSelection) {
-                        Text("Clear")
-                    }
+                ) {
+                    Icon(Icons.Default.Clear, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Clear")
+                }
+                OutlinedButton(
+                    onClick = { viewModel.save() },
+                    enabled = !uiState.isLoading && hasSelection,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.BookmarkAdd, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Save")
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { viewModel.save() },
-                enabled = !uiState.isLoading && uiState.items.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.BookmarkAdd, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Save Outfit")
-            }
-
             Spacer(Modifier.height(12.dp))
-            OutlinedButton(
-                onClick = {
-                    viewModel.markWorn()
-                    scope.launch { snackbarHostState.showSnackbar("Marked as worn") }
-                },
-                enabled = !uiState.isLoading && uiState.selectedItemIds.isNotEmpty(),
+            Button(
+                onClick = { showWearOptions = true },
+                enabled = !uiState.isLoading && hasSelection,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Checkroom, contentDescription = null)
+                Icon(Icons.Default.Event, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Mark as Worn")
+                Text("Schedule")
             }
         }
     }

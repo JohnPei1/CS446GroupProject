@@ -47,6 +47,62 @@ class ManualOutfitViewModel(
     }
 
     fun save() {
+        val outfit = buildValidatedOutfit() ?: return
+        viewModelScope.launch {
+            runCatching { outfitRepository.saveOutfit(outfit) }
+                .onSuccess { _uiState.value = _uiState.value.copy(isDone = true, error = null) }
+                .onFailure { _uiState.value = _uiState.value.copy(error = "Couldn't save the outfit.") }
+        }
+    }
+
+    /**
+     * Plans the built outfit for [date] (saving it first -- a plan references a saved outfit).
+     * If that day already has an outfit, the request is parked in
+     * [ManualOutfitUiState.pendingSchedule] for the user to confirm the replacement.
+     */
+    fun requestSchedule(date: Long) {
+        if (buildValidatedOutfit() == null) return
+        viewModelScope.launch {
+            val day = normalizeToUtcDay(date)
+            val existing = runCatching { outfitRepository.getScheduledOutfit(day) }.getOrNull()
+            if (existing != null) {
+                _uiState.value = _uiState.value.copy(
+                    pendingSchedule = PendingSchedule(day, existing.name)
+                )
+            } else {
+                performSchedule(day)
+            }
+        }
+    }
+
+    fun confirmPendingSchedule() {
+        val pending = _uiState.value.pendingSchedule ?: return
+        _uiState.value = _uiState.value.copy(pendingSchedule = null)
+        viewModelScope.launch { performSchedule(pending.date) }
+    }
+
+    fun dismissPendingSchedule() {
+        _uiState.value = _uiState.value.copy(pendingSchedule = null)
+    }
+
+    private suspend fun performSchedule(day: Long) {
+        val outfit = buildValidatedOutfit() ?: return
+        runCatching {
+            val id = outfitRepository.saveOutfit(outfit)
+            outfitRepository.scheduleOutfit(id, day)
+            // Wearing it today also records the items as worn (feeds anti-repetition scoring).
+            if (day == normalizeToUtcDay(System.currentTimeMillis())) {
+                wardrobeRepository.markItemsWorn(outfit.items.map { it.id })
+            }
+        }.onSuccess {
+            _uiState.value = _uiState.value.copy(isDone = true, error = null)
+        }.onFailure {
+            _uiState.value = _uiState.value.copy(error = "Couldn't plan the outfit.")
+        }
+    }
+
+    /** A complete outfit needs a top and a bottom; sets an error and returns null otherwise. */
+    private fun buildValidatedOutfit(): Outfit? {
         val state = _uiState.value
         val selected = state.selectedItems
         val missing = buildList {
@@ -58,28 +114,13 @@ class ManualOutfitViewModel(
                 error = "Pick an item from: ${missing.joinToString(" and ")}. " +
                         "A complete outfit needs a top and a bottom."
             )
-            return
+            return null
         }
-
-        viewModelScope.launch {
-            outfitRepository.saveOutfit(
-                Outfit(
-                    name = state.outfitName.trim().ifBlank { DEFAULT_OUTFIT_NAME },
-                    items = selected,
-                    note = "Created manually"
-                )
-            )
-            _uiState.value = _uiState.value.copy(isSaved = true, error = null)
-        }
-    }
-
-    /** record selected items as worn */
-    fun markWorn() {
-        val selected = _uiState.value.selectedItems
-        if (selected.isEmpty()) return
-        viewModelScope.launch {
-            wardrobeRepository.markItemsWorn(selected.map { it.id })
-        }
+        return Outfit(
+            name = state.outfitName.trim().ifBlank { DEFAULT_OUTFIT_NAME },
+            items = selected,
+            note = "Created manually"
+        )
     }
 
     companion object {

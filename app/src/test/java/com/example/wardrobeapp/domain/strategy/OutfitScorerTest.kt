@@ -62,6 +62,31 @@ class OutfitScorerTest {
     }
 
     @Test
+    fun pickBest_neverPicksHeavyItemInHotWeatherWhenAlternativeExists() {
+        // Reproduces the reported bug: a warmth-5 "Big Heavy coat" must not surface on a hot
+        // day just because tie-randomization or other bonuses favored it.
+        val lightTop = top(id = 1, warmthLevel = 1)
+        val parka = top(id = 2, warmthLevel = 5)
+        val constraints = OutfitConstraints(weather = WeatherInfo(temperature = 30.0, condition = "Sunny"))
+        repeat(20) {
+            val picked = OutfitScorer.pickBest(listOf(parka, lightTop), Category.TOPS, constraints, emptyList())
+            assertEquals(lightTop.id, picked?.id)
+        }
+    }
+
+    @Test
+    fun isExtremeWarmthMismatch_flagsParkaInHeatButNotAdjacentLevels() {
+        val hot = WeatherInfo(temperature = 30.0, condition = "Sunny") // ideal warmth = 1
+        assertTrue(OutfitScorer.isExtremeWarmthMismatch(top(id = 1, warmthLevel = 5), hot))
+        assertTrue(OutfitScorer.isExtremeWarmthMismatch(top(id = 2, warmthLevel = 4), hot))
+        assertTrue(!OutfitScorer.isExtremeWarmthMismatch(top(id = 3, warmthLevel = 2), hot))
+
+        val freezing = WeatherInfo(temperature = -10.0, condition = "Snow") // ideal warmth = 5
+        assertTrue(OutfitScorer.isExtremeWarmthMismatch(top(id = 4, warmthLevel = 1), freezing))
+        assertTrue(!OutfitScorer.isExtremeWarmthMismatch(top(id = 5, warmthLevel = 4), freezing))
+    }
+
+    @Test
     fun topCandidates_penalizesRecentlyWornItems() {
         val fresh = top(id = 1, timesWorn = 0, lastWornDate = null)
         val recentlyWorn = top(id = 2, timesWorn = 10, lastWornDate = System.currentTimeMillis())

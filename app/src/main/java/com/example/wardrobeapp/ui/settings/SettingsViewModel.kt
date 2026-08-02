@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.example.wardrobeapp.dataStore
 import com.example.wardrobeapp.data.repository.SettingsRepository
+import com.example.wardrobeapp.data.repository.WeatherRepository
 import com.example.wardrobeapp.WardrobeApplication
 
 
@@ -25,11 +26,11 @@ import com.example.wardrobeapp.WardrobeApplication
 private object PrefKeys {
     val DARK_MODE    = booleanPreferencesKey("dark_mode")
     val UNIT_SYSTEM  = stringPreferencesKey("unit_system")
-    val LOCATION     = stringPreferencesKey("location")
 }
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
+    private val weatherRepository: WeatherRepository,
     private val llmModelManager: LlmModelManager,
     private val context: Context
     ) : ViewModel() {
@@ -49,8 +50,8 @@ class SettingsViewModel(
                         UnitSystem.IMPERIAL else UnitSystem.METRIC
                 }
 
-            val locationFlow = context.dataStore.data
-                .map { it[PrefKeys.LOCATION] ?: "" }
+            val locationFlow = settingsRepository.savedLocation
+                .map { it?.name ?: "" }
 
             combine(darkModeFlow, unitFlow, locationFlow, settingsRepository.isAiEnabled, _isAiModelAvailable) {
                 dark, unit, loc, aiEnabled, aiModelAvailable ->
@@ -63,11 +64,16 @@ class SettingsViewModel(
                     isLoading = false
                 )
             }.collect { computed ->
-                // Preserve download-progress/error state, which isn't part of the persisted
-                // settings this combine tracks -- a plain replace here would wipe it out on
-                // every unrelated DataStore write.
+                // Preserve transient state (AI download progress/error, location search status),
+                // which isn't part of the persisted settings this combine tracks -- a plain
+                // replace here would wipe it out on every unrelated DataStore write.
                 _uiState.update { current ->
-                    computed.copy(aiDownloadProgress = current.aiDownloadProgress, aiError = current.aiError)
+                    computed.copy(
+                        aiDownloadProgress = current.aiDownloadProgress,
+                        aiError = current.aiError,
+                        isResolvingLocation = current.isResolvingLocation,
+                        locationStatus = current.locationStatus
+                    )
                 }
             }
         }
@@ -132,11 +138,49 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * Resolves the typed city to coordinates via geocoding and persists it, so the outfit
+     * generator and calendar fetch weather for the user's actual location instead of the
+     * hardcoded default.
+     */
     fun onLocationChanged(location: String) {
+        val query = location.trim()
+        if (query.isEmpty()) return
         viewModelScope.launch {
-            runCatching {
-                context.dataStore.edit { it[PrefKeys.LOCATION] = location }
-            }.onFailure { setError("Couldn't save location") }
+            _uiState.update { it.copy(isResolvingLocation = true, locationStatus = null) }
+            runCatching { weatherRepository.geocodeCity(query) }
+                .onSuccess { resolved ->
+                    if (resolved == null) {
+                        _uiState.update {
+                            it.copy(
+                                isResolvingLocation = false,
+                                locationStatus = "Couldn't find \"$query\" — check the spelling."
+                            )
+                        }
+                    } else {
+                        runCatching { settingsRepository.setLocation(resolved) }
+                            .onSuccess {
+                                _uiState.update {
+                                    it.copy(
+                                        isResolvingLocation = false,
+                                        locationStatus = "Weather location set to ${resolved.name}"
+                                    )
+                                }
+                            }
+                            .onFailure {
+                                _uiState.update { it.copy(isResolvingLocation = false) }
+                                setError("Couldn't save location")
+                            }
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(
+                            isResolvingLocation = false,
+                            locationStatus = "Couldn't reach the location service — check your connection."
+                        )
+                    }
+                }
         }
     }
 
@@ -157,6 +201,7 @@ class SettingsViewModel(
                         val container = (context.applicationContext as WardrobeApplication).container
                         return SettingsViewModel(
                             settingsRepository = container.settingsRepository,
+                            weatherRepository = container.weatherRepository,
                             llmModelManager = container.llmModelManager,
                             context = context.applicationContext
                         ) as T

@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,8 +21,8 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
-    onBack: () -> Unit,
     onNavigateToPlanner: (Long) -> Unit,
+    onSelectOutfit: (Long) -> Unit,
     viewModel: CalendarViewModel = viewModel(
         factory = CalendarViewModel.provideFactory(LocalContext.current)
     )
@@ -41,23 +39,23 @@ fun CalendarScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Calendar") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { padding ->
+    Scaffold { padding ->
         LazyColumn(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .padding(horizontal = 16.dp)
         ) {
+            // Compact header, matching the Outfit Generator and Settings screens
+            item {
+                Text(
+                    text = "Calendar",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+
             // Weather Forecast Section
             item {
                 ForecastSection(uiState.weatherForecast)
@@ -80,7 +78,8 @@ fun CalendarScreen(
                     date = uiState.selectedDate,
                     outfit = uiState.scheduledOutfits[uiState.selectedDate],
                     weather = uiState.weatherForecast[uiState.selectedDate],
-                    onPlanOutfit = { onNavigateToPlanner(uiState.selectedDate) }
+                    onGenerateOutfit = { onNavigateToPlanner(uiState.selectedDate) },
+                    onSelectOutfit = { onSelectOutfit(uiState.selectedDate) }
                 )
             }
         }
@@ -89,7 +88,7 @@ fun CalendarScreen(
 
 @Composable
 fun ForecastSection(forecast: Map<Long, WeatherInfo>) {
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
         Text("7-Day Forecast", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -116,14 +115,17 @@ fun SelectedDateDetails(
     date: Long,
     outfit: Outfit?,
     weather: WeatherInfo?,
-    onPlanOutfit: () -> Unit
+    onGenerateOutfit: () -> Unit,
+    onSelectOutfit: () -> Unit
 ) {
-    Column(modifier = Modifier.padding(16.dp)) {
+    val isPlannable = normalizeDate(date) >= normalizeDate(System.currentTimeMillis())
+
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
         Text(
             text = "Details for ${formatDateLong(date)}",
             style = MaterialTheme.typography.titleLarge
         )
-        
+
         weather?.let {
             Spacer(modifier = Modifier.height(8.dp))
             Text("Weather: ${it.temperature}°C, ${it.condition}")
@@ -141,12 +143,24 @@ fun SelectedDateDetails(
                 OutfitItemRow(item = item)
                 Spacer(modifier = Modifier.height(8.dp))
             }
+            if (isPlannable) {
+                // Re-planning is always allowed; the flows confirm before replacing this outfit.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onGenerateOutfit) { Text("Generate new") }
+                    TextButton(onClick = onSelectOutfit) { Text("Choose saved") }
+                }
+            }
         } else {
             Text("No outfit planned for this day.")
             Spacer(modifier = Modifier.height(8.dp))
-            if (normalizeDate(date) >= normalizeDate(System.currentTimeMillis())) {
-                Button(onClick = onPlanOutfit) {
-                    Text("Plan Outfit")
+            if (isPlannable) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = onGenerateOutfit) {
+                        Text("Generate Outfit")
+                    }
+                    OutlinedButton(onClick = onSelectOutfit) {
+                        Text("Choose Saved")
+                    }
                 }
             }
         }

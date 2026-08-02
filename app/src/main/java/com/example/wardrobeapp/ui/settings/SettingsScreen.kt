@@ -9,8 +9,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -81,6 +85,7 @@ private fun SettingsContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -125,9 +130,16 @@ private fun SettingsContent(
 
         // Location
         Column {
-            Text(text = "Location", style = MaterialTheme.typography.titleMedium)
+            Text(text = "Weather Location", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Used for weather-aware outfit suggestions and the calendar forecast. " +
+                    "Add a region to disambiguate, e.g. \"Waterloo, Ontario\".",
+                style = MaterialTheme.typography.bodySmall
+            )
             Spacer(modifier = Modifier.height(8.dp))
-            var localLocation by remember { mutableStateOf(uiState.location) }
+            // Re-keyed on uiState.location so the field reflects the resolved name after a search.
+            var localLocation by remember(uiState.location) { mutableStateOf(uiState.location) }
 
             OutlinedTextField(
                 value = localLocation,
@@ -135,9 +147,14 @@ private fun SettingsContent(
                 label = { Text("City or area") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !uiState.isResolvingLocation,
                 trailingIcon = {
-                    IconButton(onClick = { onLocationChanged(localLocation) }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    if (uiState.isResolvingLocation) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        IconButton(onClick = { onLocationChanged(localLocation) }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search")
+                        }
                     }
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -147,6 +164,18 @@ private fun SettingsContent(
                     }
                 )
             )
+            uiState.locationStatus?.let { status ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (status.startsWith("Weather location set")) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+            }
         }
 
         Divider()

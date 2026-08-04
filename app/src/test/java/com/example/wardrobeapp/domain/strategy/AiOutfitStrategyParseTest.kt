@@ -1,21 +1,37 @@
 package com.example.wardrobeapp.domain.strategy
 
 import com.example.wardrobeapp.domain.model.ClothingItem
+import com.example.wardrobeapp.domain.model.WeatherInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AiOutfitStrategyParseTest {
 
-    private fun item(id: Long, category: String) =
-        ClothingItem(id = id, name = "Item $id", category = category, imagePath = "")
+    private fun item(id: Long, category: String, warmthLevel: Int = 3) =
+        ClothingItem(id = id, name = "Item $id", category = category, imagePath = "", warmthLevel = warmthLevel)
 
     private val candidates = mapOf(
         Category.TOPS to listOf(item(1, Category.TOPS), item(2, Category.TOPS)),
         Category.BOTTOMS to listOf(item(10, Category.BOTTOMS)),
         Category.FOOTWEAR to listOf(item(20, Category.FOOTWEAR)),
-        Category.OUTERWEAR to listOf(item(30, Category.OUTERWEAR))
+        Category.OUTERWEAR to listOf(item(30, Category.OUTERWEAR)),
+        Category.ACCESSORIES to listOf(item(40, Category.ACCESSORIES))
     )
+
+    @Test
+    fun includesAccessoryWhenSpecified() {
+        val raw = """{"topId": 1, "bottomId": 10, "footwearId": 20, "accessoryId": 40, "reasoning": "with a chain"}"""
+        val result = parseAndValidate(raw, candidates)
+        assertTrue(result.items.any { it.id == 40L })
+    }
+
+    @Test
+    fun omitsAccessoryWhenNotSpecified() {
+        val raw = """{"topId": 1, "bottomId": 10, "footwearId": 20, "reasoning": "no accessory needed"}"""
+        val result = parseAndValidate(raw, candidates)
+        assertTrue(result.items.none { it.category == Category.ACCESSORIES })
+    }
 
     @Test
     fun parsesValidJsonReply() {
@@ -70,5 +86,57 @@ class AiOutfitStrategyParseTest {
     @Test(expected = Exception::class)
     fun throwsOnMalformedJson() {
         parseAndValidate("not json at all", candidates)
+    }
+
+    @Test
+    fun wardrobeGapSkipsIdResolutionAndReturnsNoItems() {
+        // The model declared the request unsatisfiable; the required-slot force-fill must NOT
+        // kick in and dress the user anyway.
+        val raw = """{"topId": null, "bottomId": null, "wardrobeGap": "Add swimwear to your wardrobe for swimming."}"""
+        val result = parseAndValidate(raw, candidates)
+        assertTrue(result.items.isEmpty())
+        assertEquals("Add swimwear to your wardrobe for swimming.", result.wardrobeGap)
+    }
+
+    @Test
+    fun blankWardrobeGapIsIgnoredAndOutfitResolvesNormally() {
+        val raw = """{"topId": 1, "bottomId": 10, "wardrobeGap": "  ", "reasoning": "ok"}"""
+        val result = parseAndValidate(raw, candidates)
+        assertEquals(listOf(1L, 10L), result.items.map { it.id })
+        assertEquals(null, result.wardrobeGap)
+    }
+
+    // --- weatherAppropriateShortlist: keeps wildly weather-wrong items away from the model ---
+
+    private val hotDay = WeatherInfo(temperature = 30.0, condition = "Sunny")
+
+    @Test
+    fun shortlist_dropsParkaFromOptionalCategoryInHeat() {
+        val parka = item(30, Category.OUTERWEAR, warmthLevel = 5)
+        val filtered = weatherAppropriateShortlist(listOf(parka), hotDay, required = false)
+        assertTrue(filtered.isEmpty())
+    }
+
+    @Test
+    fun shortlist_keepsRequiredCategoryEvenIfAllCandidatesMismatch() {
+        // The user only owns heavy tops: they still have to wear something.
+        val heavyTop = item(1, Category.TOPS, warmthLevel = 5)
+        val filtered = weatherAppropriateShortlist(listOf(heavyTop), hotDay, required = true)
+        assertEquals(listOf(heavyTop.id), filtered.map { it.id })
+    }
+
+    @Test
+    fun shortlist_dropsOnlyTheMismatchedCandidates() {
+        val lightTop = item(1, Category.TOPS, warmthLevel = 1)
+        val heavyTop = item(2, Category.TOPS, warmthLevel = 5)
+        val filtered = weatherAppropriateShortlist(listOf(lightTop, heavyTop), hotDay, required = true)
+        assertEquals(listOf(lightTop.id), filtered.map { it.id })
+    }
+
+    @Test
+    fun shortlist_passesThroughUnchangedWithoutWeather() {
+        val parka = item(30, Category.OUTERWEAR, warmthLevel = 5)
+        val filtered = weatherAppropriateShortlist(listOf(parka), weather = null, required = false)
+        assertEquals(listOf(parka.id), filtered.map { it.id })
     }
 }

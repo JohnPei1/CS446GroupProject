@@ -10,8 +10,12 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.wardrobeapp.ui.wardrobe.WardrobeScreen
+import com.example.wardrobeapp.ui.outfit.ManualOutfitScreen
+import com.example.wardrobeapp.ui.outfit.MyOutfitsScreen
 import com.example.wardrobeapp.ui.outfit.OutfitGeneratorScreen
 import com.example.wardrobeapp.ui.outfit.OutfitViewModel
+import com.example.wardrobeapp.ui.outfit.SelectOutfitScreen
+import com.example.wardrobeapp.ui.outfit.SelectOutfitViewModel
 import com.example.wardrobeapp.ui.calendar.CalendarScreen
 import com.example.wardrobeapp.ui.settings.SettingsScreen
 import com.example.wardrobeapp.ui.wardrobe.AddItemScreen
@@ -28,16 +32,21 @@ fun AppNavigation(
     val wardrobeViewModel: WardrobeViewModel = viewModel(factory = WardrobeViewModel.Factory)
     NavHost(
         navController = navController,
-        startDestination = Screen.OutfitGenerator.route,
+        startDestination = Screen.MyOutfits.route,
         modifier = modifier
     ) {
+        composable(Screen.MyOutfits.route) {
+            MyOutfitsScreen(
+                onNavigateToGenerator = { navController.navigate(Screen.OutfitGenerator.createRoute()) },
+                onCreateOutfit = { navController.navigate(Screen.ManualOutfit.route) }
+            )
+        }
         composable(Screen.Wardrobe.route) {
             WardrobeScreen(
                 onNavigateToAddItem = { navController.navigate(Screen.AddItem.route) },
                 onNavigateToEditItem = { itemId: String ->
                     navController.navigate(Screen.EditItem.createRoute(itemId))
                 },
-                onBack = { navController.popBackStack() },
                 viewModel = wardrobeViewModel
             )
         }
@@ -53,14 +62,36 @@ fun AppNavigation(
             val date = backStackEntry.arguments?.getLong("date")?.takeIf { it != -1L }
             OutfitGeneratorScreen(
                 date = date,
+                onNavigateToManual = { navController.navigate(Screen.ManualOutfit.route) },
+                onNavigateToAddItem = { navController.navigate(Screen.AddItem.route) },
                 viewModel = viewModel(factory = OutfitViewModel.provideFactory(context))
+            )
+        }
+        composable(Screen.ManualOutfit.route) {
+            ManualOutfitScreen(
+                onExitClick = { navController.popBackStack() }
+            )
+        }
+        composable(
+            route = Screen.SelectOutfit.route,
+            arguments = listOf(
+                navArgument("date") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val date = backStackEntry.arguments?.getLong("date") ?: System.currentTimeMillis()
+            SelectOutfitScreen(
+                date = date,
+                onBack = { navController.popBackStack() },
+                viewModel = viewModel(factory = SelectOutfitViewModel.provideFactory(context, date))
             )
         }
         composable(Screen.Calendar.route) {
             CalendarScreen(
-                onBack = { navController.popBackStack() },
                 onNavigateToPlanner = { date ->
                     navController.navigate(Screen.OutfitGenerator.createRoute(date))
+                },
+                onSelectOutfit = { date ->
+                    navController.navigate(Screen.SelectOutfit.createRoute(date))
                 }
             )
         }

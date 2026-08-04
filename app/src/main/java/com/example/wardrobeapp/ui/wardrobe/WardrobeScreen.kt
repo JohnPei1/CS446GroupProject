@@ -23,13 +23,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wardrobeapp.domain.model.ClothingItem
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WardrobeScreen(
     onNavigateToAddItem: () -> Unit,
     onNavigateToEditItem: (String) -> Unit,
-    onBack: () -> Unit,
     viewModel: WardrobeViewModel = viewModel(factory = WardrobeViewModel.Factory)
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -40,16 +43,6 @@ fun WardrobeScreen(
     val clothData = uiState.items
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Wardrobe") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onNavigateToAddItem,
@@ -64,14 +57,23 @@ fun WardrobeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .padding(horizontal = 16.dp)
         ) {
+            // Compact header, matching the Outfit Generator and Settings screens
+            Text(
+                text = "Wardrobe",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+
             // Search Bar
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(vertical = 12.dp),
                 placeholder = { Text("Search wardrobe...", style = MaterialTheme.typography.bodyMedium) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
@@ -84,7 +86,6 @@ fun WardrobeScreen(
 
             // Category Filters
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(bottom = 8.dp)
             ) {
@@ -114,7 +115,7 @@ fun WardrobeScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(vertical = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize()
@@ -130,6 +131,21 @@ fun WardrobeScreen(
             }
         }
     }
+}
+
+/** "Never worn" / "Worn 3× · last worn yesterday" -- makes Mark as Worn's effect visible. */
+private fun wornSummary(item: ClothingItem): String {
+    if (item.timesWorn == 0) return "Never worn"
+    val worn = "Worn ${item.timesWorn}×"
+    val lastWorn = item.lastWornDate ?: return worn
+    val days = TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - lastWorn)
+    val ago = when {
+        days <= 0L -> "today"
+        days == 1L -> "yesterday"
+        days < 7L -> "$days days ago"
+        else -> SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(lastWorn))
+    }
+    return "$worn · last worn $ago"
 }
 
 @Composable
@@ -213,6 +229,13 @@ fun WardrobeItemCard(
                     text = item.category,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    text = wornSummary(item),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

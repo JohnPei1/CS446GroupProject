@@ -17,6 +17,7 @@ object Category {
     const val BOTTOMS = "Bottoms"
     const val FOOTWEAR = "Footwear"
     const val OUTERWEAR = "Outerwear"
+    const val ACCESSORIES = "Accessories"
 }
 
 /**
@@ -26,3 +27,11 @@ object Category {
  */
 class IncompleteOutfitException(val missingCategories: List<String>) :
     Exception("Missing items in: ${missingCategories.joinToString(", ")}")
+
+/**
+ * Thrown when the wardrobe cannot honestly satisfy the request (no swimwear for a Swim
+ * occasion, nothing warm enough for -30°C, ...). Rather than forcing an unsuitable "normal"
+ * outfit, callers should surface [gaps] and suggest expanding the wardrobe.
+ */
+class WardrobeGapException(val gaps: List<String>) :
+    Exception(gaps.joinToString("\n"))

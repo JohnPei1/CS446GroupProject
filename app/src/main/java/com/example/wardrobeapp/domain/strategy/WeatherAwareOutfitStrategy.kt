@@ -32,6 +32,7 @@ class WeatherAwareOutfitStrategy : OutfitStrategy {
         if (temperature != null && temperature <= COLD_THRESHOLD_CELSIUS) {
             OutfitScorer.pickBest(items, Category.OUTERWEAR, constraints, selected)?.let { selected.add(it) }
         }
+        OutfitScorer.matchedAccessory(items, constraints)?.let { selected.add(it) }
 
         val name = when {
             temperature == null -> "Everyday Outfit"
@@ -39,11 +40,11 @@ class WeatherAwareOutfitStrategy : OutfitStrategy {
             temperature >= HOT_THRESHOLD_CELSIUS -> "Warm Weather Outfit"
             else -> "Everyday Outfit"
         }
-        val noteParts = listOfNotNull(
-            constraints.occasion?.let { "Matched: $it" },
-            temperature?.let { "fits ${it.toInt()}°C" }
+        val note = OutfitScorer.buildNote(
+            constraints,
+            extra = listOfNotNull(temperature?.let { "sized for about ${it.toInt()}°C weather" })
         )
-        return Outfit(name = name, items = selected, note = noteParts.joinToString(" · ").ifBlank { null })
+        return Outfit(name = name, items = selected, note = note)
     }
 
     companion object {

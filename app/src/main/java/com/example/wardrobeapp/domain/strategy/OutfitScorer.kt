@@ -2,6 +2,9 @@ package com.example.wardrobeapp.domain.strategy
 
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.OutfitConstraints
+import com.example.wardrobeapp.domain.model.WarmthLevels
+import com.example.wardrobeapp.domain.model.WeatherInfo
+import java.util.Calendar
 import kotlin.math.abs
 
 /**
@@ -14,6 +17,11 @@ object OutfitScorer {
     private const val RECENT_WORN_WINDOW_MS = 3L * 24 * 60 * 60 * 1000 // 3 days
     private const val VARIETY_SCORE_MARGIN = 6 // ties within this margin are randomized; a clear winner is not
     private const val PROMPT_MATCH_BONUS = 20
+    private const val RECENT_GENERATION_PENALTY = 10 // discourages repeating last generation's picks
+    private const val EXTREME_WARMTH_MISMATCH = 3 // levels off the ideal beyond which an item is just wrong
+    private const val EXTREME_WARMTH_PENALTY = 20
+    private const val SEASON_MATCH_BONUS = 6
+    private const val SEASON_MISMATCH_PENALTY = 8
 
     private val PROMPT_STOPWORDS = setOf(
         "and", "the", "for", "with", "your", "need", "want", "just", "some",
@@ -72,12 +80,17 @@ object OutfitScorer {
         }
 
         constraints.weather?.let { weather ->
-            val idealWarmth = idealWarmthFor(weather.temperature)
-            score += 10 - abs(item.warmthLevel - idealWarmth) * 4
+            val warmthMismatch = abs(item.warmthLevel - WarmthLevels.idealFor(weather.temperature))
+            score += 10 - warmthMismatch * 4
+            // An item 3+ levels off (a heavy parka on a hot day) is never a reasonable "variety"
+            // pick -- push it well outside the tie margin so other bonuses can't rescue it.
+            if (isExtremeWarmthMismatch(item, weather)) score -= EXTREME_WARMTH_PENALTY
             if (weather.condition.contains("rain", ignoreCase = true) && item.isWaterResistant) {
                 score += 15
             }
         }
+
+        score += seasonScore(item.season)
 
         alreadyPicked.forEach { picked ->
             score += if (colorsCompatible(item.colorFamily, picked.colorFamily)) 8 else -6
@@ -92,7 +105,28 @@ object OutfitScorer {
 
         score += promptMatchBonus(item, constraints.userPrompt)
 
+        if (item.id in constraints.recentItemIds) score -= RECENT_GENERATION_PENALTY
+
         return score
+    }
+
+    /**
+     * Returns an accessory only when there's a genuine reason to include one -- a user-prompt
+     * keyword match or an occasion-tag match -- rather than tacking a random accessory onto every
+     * outfit. This is how a typed request like "gold chain" actually surfaces an Accessories item;
+     * none of the strategies previously considered that category at all.
+     */
+    fun matchedAccessory(items: List<ClothingItem>, constraints: OutfitConstraints): ClothingItem? {
+        if (constraints.userPrompt.isNullOrBlank() && constraints.occasion == null) return null
+        val candidates = items.filter { it.category.equals(Category.ACCESSORIES, ignoreCase = true) }
+        if (candidates.isEmpty()) return null
+
+        val best = candidates.maxByOrNull { score(it, constraints, emptyList()) } ?: return null
+        val occasionMatch = constraints.occasion?.let { occasion ->
+            best.tags.any { it.equals(occasion, ignoreCase = true) }
+        } ?: false
+        val promptMatch = promptMatchBonus(best, constraints.userPrompt) > 0
+        return if (occasionMatch || promptMatch) best else null
     }
 
     /**
@@ -119,13 +153,53 @@ object OutfitScorer {
         return matches * PROMPT_MATCH_BONUS
     }
 
-    /** Bucketed target warmth (1-5) for a given temperature. */
-    private fun idealWarmthFor(temperatureCelsius: Double): Int = when {
-        temperatureCelsius <= 0 -> 5
-        temperatureCelsius <= 8 -> 4
-        temperatureCelsius <= 15 -> 3
-        temperatureCelsius <= 22 -> 2
-        else -> 1
+    /**
+     * Builds a human-readable explanation of what influenced a deterministic pick, so an outfit
+     * is never shown with no rationale at all -- falls back to a generic reason when nothing
+     * specific (occasion/weather/prompt) was set.
+     */
+    fun buildNote(constraints: OutfitConstraints, extra: List<String> = emptyList()): String {
+        val clauses = buildList {
+            constraints.occasion?.let { add("matched to a $it occasion") }
+            addAll(extra)
+            constraints.userPrompt?.takeIf { it.isNotBlank() }?.let { add("shaped by your note \"$it\"") }
+        }
+        return if (clauses.isEmpty()) {
+            "Picked from your wardrobe for a balanced color pairing, favoring pieces you haven't " +
+                "worn as recently to keep things varied."
+        } else {
+            "Picked from your wardrobe, " + clauses.joinToString(", and ") + "."
+        }
+    }
+
+    /**
+     * True when the item's warmth is so far off what the temperature calls for (a heavy parka on
+     * a hot day, a summer top in a deep freeze) that it should never be suggested if any
+     * alternative exists. Shared with [AiOutfitStrategy] to keep such items out of the
+     * candidates shown to the on-device model.
+     */
+    fun isExtremeWarmthMismatch(item: ClothingItem, weather: WeatherInfo): Boolean =
+        abs(item.warmthLevel - WarmthLevels.idealFor(weather.temperature)) >= EXTREME_WARMTH_MISMATCH
+
+    /**
+     * Favors items tagged for the current season; "All-Season" is neutral. Items tagged for a
+     * different season are penalized past the tie margin so a Winter piece doesn't surface in
+     * July just because the weather fetch failed. Seasons follow the northern hemisphere.
+     */
+    private fun seasonScore(itemSeason: String): Int {
+        if (itemSeason.equals("All-Season", ignoreCase = true)) return 0
+        return if (itemSeason.equals(currentSeason(), ignoreCase = true)) {
+            SEASON_MATCH_BONUS
+        } else {
+            -SEASON_MISMATCH_PENALTY
+        }
+    }
+
+    private fun currentSeason(): String = when (Calendar.getInstance().get(Calendar.MONTH)) {
+        Calendar.DECEMBER, Calendar.JANUARY, Calendar.FEBRUARY -> "Winter"
+        Calendar.MARCH, Calendar.APRIL, Calendar.MAY -> "Spring"
+        Calendar.JUNE, Calendar.JULY, Calendar.AUGUST -> "Summer"
+        else -> "Fall"
     }
 
     private fun colorsCompatible(a: String, b: String): Boolean {

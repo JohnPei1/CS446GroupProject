@@ -1,9 +1,5 @@
 package com.example.wardrobeapp.ui.settings
 
-import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,10 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -44,8 +44,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 
-private const val AI_MODEL_INFO_URL = "https://huggingface.co/litert-community/Gemma3-1B-IT"
-
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit = {},
@@ -69,7 +67,6 @@ fun SettingsScreen(
                 onUnitSystemSelected = viewModel::onUnitSystemSelected,
                 onLocationChanged = viewModel::onLocationChanged,
                 onAiEnabledToggled = viewModel::onAiEnabledToggled,
-                onImportAiModel = viewModel::importAiModel,
                 onDeleteAiModel = viewModel::deleteAiModel
             )
         }
@@ -83,16 +80,12 @@ private fun SettingsContent(
     onUnitSystemSelected: (UnitSystem) -> Unit,
     onLocationChanged: (String) -> Unit,
     onAiEnabledToggled: (Boolean) -> Unit,
-    onImportAiModel: (Uri) -> Unit,
     onDeleteAiModel: () -> Unit
 ) {
-    val context = LocalContext.current
-    val importModelLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri -> uri?.let(onImportAiModel) }
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
@@ -137,9 +130,16 @@ private fun SettingsContent(
 
         // Location
         Column {
-            Text(text = "Location", style = MaterialTheme.typography.titleMedium)
+            Text(text = "Weather Location", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Used for weather-aware outfit suggestions and the calendar forecast. " +
+                    "Add a region to disambiguate, e.g. \"Waterloo, Ontario\".",
+                style = MaterialTheme.typography.bodySmall
+            )
             Spacer(modifier = Modifier.height(8.dp))
-            var localLocation by remember { mutableStateOf(uiState.location) }
+            // Re-keyed on uiState.location so the field reflects the resolved name after a search.
+            var localLocation by remember(uiState.location) { mutableStateOf(uiState.location) }
 
             OutlinedTextField(
                 value = localLocation,
@@ -147,9 +147,14 @@ private fun SettingsContent(
                 label = { Text("City or area") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !uiState.isResolvingLocation,
                 trailingIcon = {
-                    IconButton(onClick = { onLocationChanged(localLocation) }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    if (uiState.isResolvingLocation) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        IconButton(onClick = { onLocationChanged(localLocation) }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search")
+                        }
                     }
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -159,6 +164,18 @@ private fun SettingsContent(
                     }
                 )
             )
+            uiState.locationStatus?.let { status ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (status.startsWith("Weather location set")) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+            }
         }
 
         Divider()
@@ -168,8 +185,8 @@ private fun SettingsContent(
             Text(text = "AI Outfit Suggestions (Beta)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Runs entirely on your device using a local model file you provide. " +
-                    "Your wardrobe data never leaves your phone.",
+                text = "Runs entirely on your device. Turning this on downloads a free, open-source " +
+                    "AI model once (~270MB); your wardrobe data never leaves your phone.",
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -179,44 +196,39 @@ private fun SettingsContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = if (uiState.isAiModelAvailable) "Enable AI suggestions" else "Import a model to enable")
+                Text(text = "Enable AI suggestions")
                 Switch(
                     checked = uiState.isAiEnabled,
-                    enabled = uiState.isAiModelAvailable,
+                    enabled = uiState.aiDownloadProgress == null,
                     onCheckedChange = onAiEnabledToggled
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = if (uiState.isAiModelAvailable) "Model status: imported" else "Model status: not imported",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            uiState.aiDownloadProgress?.let { progress ->
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Downloading AI model… ${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { importModelLauncher.launch(arrayOf("*/*")) }) {
-                    Text("Import model file (.task)")
-                }
-                if (uiState.isAiModelAvailable) {
-                    OutlinedButton(onClick = onDeleteAiModel) {
-                        Text("Remove")
-                    }
+            uiState.aiError?.let { error ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            if (uiState.isAiModelAvailable && uiState.aiDownloadProgress == null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(onClick = onDeleteAiModel) {
+                    Text("Remove downloaded model")
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AI_MODEL_INFO_URL)))
-            }) {
-                Text("Get a model from Hugging Face")
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Download a MediaPipe-compatible .task LLM (e.g. Gemma-3 1B-it) in your " +
-                    "browser, then import it above. For development, adb push works too: " +
-                    "adb push model.task /data/data/com.example.wardrobeapp/files/llm/model.task",
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }

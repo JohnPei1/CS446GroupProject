@@ -10,14 +10,17 @@ interface ScheduledOutfitDao {
     fun getAllScheduledOutfits(): Flow<List<ScheduledOutfitEntity>>
 
     @Query("SELECT * FROM scheduled_outfits WHERE date = :date LIMIT 1")
-    fun getScheduledOutfitByDateFlow(date: Long): Flow<ScheduledOutfitEntity?>
+    suspend fun getByDate(date: Long): ScheduledOutfitEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(scheduledOutfit: ScheduledOutfitEntity)
 
+    @Delete
+    suspend fun delete(scheduledOutfit: ScheduledOutfitEntity)
+
     @Query("DELETE FROM scheduled_outfits WHERE date = :date")
     suspend fun deleteByDate(date: Long)
 
-    @Delete
-    suspend fun delete(scheduledOutfit: ScheduledOutfitEntity)
+    @Query("DELETE FROM scheduled_outfits WHERE outfitId = :outfitId")
+    suspend fun deleteByOutfitId(outfitId: Long)
 }

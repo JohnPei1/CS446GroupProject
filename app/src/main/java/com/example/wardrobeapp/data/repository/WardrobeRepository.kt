@@ -12,4 +12,7 @@ interface WardrobeRepository {
     suspend fun insertItem(item: ClothingItem)
     suspend fun deleteItem(item: ClothingItem)
     suspend fun markItemsWorn(ids: List<Long>)
+
+    /** One-time cleanup: zeroes timesWorn/lastWornDate on every item. Nothing else is touched. */
+    suspend fun resetWornStats()
 }

@@ -16,9 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -66,8 +64,7 @@ fun SettingsScreen(
                 onDarkModeToggled = viewModel::onDarkModeToggled,
                 onUnitSystemSelected = viewModel::onUnitSystemSelected,
                 onLocationChanged = viewModel::onLocationChanged,
-                onAiEnabledToggled = viewModel::onAiEnabledToggled,
-                onDeleteAiModel = viewModel::deleteAiModel
+                onAiEnabledToggled = viewModel::onAiEnabledToggled
             )
         }
     }
@@ -79,8 +76,7 @@ private fun SettingsContent(
     onDarkModeToggled: (Boolean) -> Unit,
     onUnitSystemSelected: (UnitSystem) -> Unit,
     onLocationChanged: (String) -> Unit,
-    onAiEnabledToggled: (Boolean) -> Unit,
-    onDeleteAiModel: () -> Unit
+    onAiEnabledToggled: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -180,13 +176,14 @@ private fun SettingsContent(
 
         Divider()
 
-        // AI outfit suggestions (on-device only, opt-in)
+        // AI outfit suggestions (cloud AI, opt-in)
         Column {
             Text(text = "AI Outfit Suggestions (Beta)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Runs entirely on your device. Turning this on downloads a free, open-source " +
-                    "AI model once (~270MB); your wardrobe data never leaves your phone.",
+                text = "Sends each item's name, brand, and structured metadata (categories, tags, " +
+                    "colors, warmth) to Google's Gemini AI over the internet to generate a " +
+                    "suggestion -- never a photo. Requires an internet connection.",
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -199,18 +196,7 @@ private fun SettingsContent(
                 Text(text = "Enable AI suggestions")
                 Switch(
                     checked = uiState.isAiEnabled,
-                    enabled = uiState.aiDownloadProgress == null,
                     onCheckedChange = onAiEnabledToggled
-                )
-            }
-
-            uiState.aiDownloadProgress?.let { progress ->
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Downloading AI model… ${(progress * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodySmall
                 )
             }
 
@@ -221,13 +207,6 @@ private fun SettingsContent(
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall
                 )
-            }
-
-            if (uiState.isAiModelAvailable && uiState.aiDownloadProgress == null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(onClick = onDeleteAiModel) {
-                    Text("Remove downloaded model")
-                }
             }
         }
     }

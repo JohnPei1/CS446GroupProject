@@ -9,6 +9,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import com.example.wardrobeapp.ui.wardrobe.WardrobeScreen
 import com.example.wardrobeapp.ui.outfit.ManualOutfitScreen
 import com.example.wardrobeapp.ui.outfit.MyOutfitsScreen
@@ -78,7 +79,7 @@ fun AppNavigation(
                 navArgument("date") { type = NavType.LongType }
             )
         ) { backStackEntry ->
-            val date = backStackEntry.arguments?.getLong("date") ?: System.currentTimeMillis()
+            val date = backStackEntry.arguments?.getLong("date") ?: normalizeToUtcDay(System.currentTimeMillis())
             SelectOutfitScreen(
                 date = date,
                 onBack = { navController.popBackStack() },

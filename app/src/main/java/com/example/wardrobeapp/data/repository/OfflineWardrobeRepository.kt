@@ -28,6 +28,10 @@ class OfflineWardrobeRepository(private val clothingItemDao: ClothingItemDao) : 
     override suspend fun markItemsWorn(ids: List<Long>) {
         clothingItemDao.markWorn(ids, System.currentTimeMillis())
     }
+
+    override suspend fun resetWornStats() {
+        clothingItemDao.resetWornStats()
+    }
 }
 
 // Mapping extensions

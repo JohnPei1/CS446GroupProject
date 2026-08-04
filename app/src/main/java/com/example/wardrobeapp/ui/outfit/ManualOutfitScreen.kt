@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.ClothingItem
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import com.example.wardrobeapp.ui.wardrobe.CATEGORIES
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,7 +50,7 @@ fun ManualOutfitScreen(
             outfitName = uiState.outfitName.trim().ifBlank { "My Outfit" },
             onWearToday = {
                 showWearOptions = false
-                viewModel.requestSchedule(System.currentTimeMillis())
+                viewModel.requestSchedule(normalizeToUtcDay(System.currentTimeMillis()))
             },
             onPickDate = {
                 showWearOptions = false

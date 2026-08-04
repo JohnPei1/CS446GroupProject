@@ -4,6 +4,8 @@ import com.example.wardrobeapp.domain.model.SavedLocation
 import com.example.wardrobeapp.domain.model.WeatherInfo
 import com.example.wardrobeapp.data.remote.RetrofitInstance.apiService
 import com.example.wardrobeapp.data.remote.WeatherDto
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -54,7 +56,7 @@ class WeatherRepository {
         val response: WeatherDto = apiService.getWeather(lat, lon);
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
         val weatherMap = mutableMapOf<Long, WeatherInfo>()
-        val today = getTodayUtcMidnight()
+        val today = normalizeToUtcDay(System.currentTimeMillis())
 
         weatherMap[today] = WeatherInfo(
             temperature = response.daily.temperatureMax[0],
@@ -63,35 +65,13 @@ class WeatherRepository {
         calendar.setTimeInMillis(today)
         for (i in 1..6){
             calendar.add(Calendar.DAY_OF_YEAR, 1)
-            val futureDate = normalizeDate(calendar.timeInMillis)
+            val futureDate = floorToUtcMidnight(calendar.timeInMillis)
             weatherMap[futureDate] = WeatherInfo(
                 temperature = response.daily.temperatureMax[i],
                 condition = fromWmoCode(response.daily.weatherCode[i])
             )
         }
         return weatherMap
-    }
-
-    private fun normalizeDate(timeInMillis: Long): Long {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        calendar.timeInMillis = timeInMillis
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
-    }
-
-    private fun getTodayUtcMidnight(): Long {
-        val calendar = Calendar.getInstance()
-        val year = calendar.get(Calendar.YEAR)
-        val month = calendar.get(Calendar.MONTH)
-        val date = calendar.get(Calendar.DATE)
-
-        val utcCalendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        utcCalendar.clear()
-        utcCalendar.set(year, month, date)
-        return utcCalendar.timeInMillis
     }
 
     private fun fromWmoCode(code: Int): String {

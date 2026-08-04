@@ -55,6 +55,24 @@ class SimpleOutfitStrategyTest {
     }
 
     @Test
+    fun generateOutfit_includesOuterwearWhenItMatchesTheOccasion() = runBlocking {
+        // This strategy never considered outerwear at all before -- a Formal request with
+        // weather-aware off could never get a blazer, regardless of the wardrobe.
+        val blazer = ClothingItem(id = 4, name = "Blazer", category = Category.OUTERWEAR, imagePath = "", tags = listOf("Formal"))
+        val wardrobe = listOf(item(1, Category.TOPS), item(2, Category.BOTTOMS), blazer)
+        val outfit = SimpleOutfitStrategy().generateOutfit(wardrobe, OutfitConstraints(occasion = "Formal"))
+        assertTrue(outfit.items.any { it.id == blazer.id })
+    }
+
+    @Test
+    fun generateOutfit_omitsOuterwearWhenItDoesNotMatchTheOccasion() = runBlocking {
+        val windbreaker = ClothingItem(id = 4, name = "Windbreaker", category = Category.OUTERWEAR, imagePath = "", tags = listOf("Outdoor"))
+        val wardrobe = listOf(item(1, Category.TOPS), item(2, Category.BOTTOMS), windbreaker)
+        val outfit = SimpleOutfitStrategy().generateOutfit(wardrobe, OutfitConstraints(occasion = "Formal"))
+        assertTrue(outfit.items.none { it.category == Category.OUTERWEAR })
+    }
+
+    @Test
     fun generateOutfit_throwsWhenBottomsMissing() = runBlocking {
         // Reproduces the reported "top+bottom+outerwear, no footwear" wardrobe shape, minus the
         // bottom, to confirm a missing required category is now a clear error, not a silent

@@ -39,6 +39,8 @@ import com.example.wardrobeapp.WardrobeApplication
 import com.example.wardrobeapp.data.repository.OutfitRepository
 import com.example.wardrobeapp.data.repository.WardrobeRepository
 import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,7 +77,9 @@ class SelectOutfitViewModel(
 
     fun select(outfit: Outfit) {
         viewModelScope.launch {
-            val day = normalizeToUtcDay(date)
+            // date (this class's constructor param) is already a resolved day-key, from the
+            // calendar -- floor it, don't re-run local-time-zone interpretation.
+            val day = floorToUtcMidnight(date)
             val existing = runCatching { outfitRepository.getScheduledOutfit(day) }.getOrNull()
             if (existing != null && existing.id != outfit.id) {
                 pendingOutfit = outfit

@@ -20,12 +20,40 @@ object OutfitScorer {
     private const val RECENT_GENERATION_PENALTY = 10 // discourages repeating last generation's picks
     private const val EXTREME_WARMTH_MISMATCH = 3 // levels off the ideal beyond which an item is just wrong
     private const val EXTREME_WARMTH_PENALTY = 20
+    // A typed request (see score()) keeps the original, softer weather weight above -- once the
+    // user has said what they want, weather should mostly defer to it (AiOutfitStrategy's prompt
+    // tells the AI the same thing). A bare "Generate" tap with nothing specific typed uses these
+    // stronger values instead: reported bug was shorts recommended at 15°C and NOT recommended
+    // at 32°C, meaning the old weight (a 2-level mismatch netted only a small +2) was too weak to
+    // reliably beat recency/variety/season noise in either direction.
+    private const val GENERIC_WARMTH_PENALTY_PER_LEVEL = 8 // was effectively 4
+    private const val GENERIC_EXTREME_WARMTH_MISMATCH = 2 // was effectively 3
     private const val SEASON_MATCH_BONUS = 6
     private const val SEASON_MISMATCH_PENALTY = 8
 
     private val PROMPT_STOPWORDS = setOf(
         "and", "the", "for", "with", "your", "need", "want", "just", "some",
         "this", "that", "outfit", "look", "please", "wear", "wearing"
+    )
+
+    // Common free-text phrasings (including the app's own prompt placeholder examples) that
+    // imply one of TagOptions.OCCASIONS without using that exact word.
+    private val OCCASION_SYNONYMS: Map<String, String> = mapOf(
+        "funeral" to "Formal",
+        "wedding" to "Formal",
+        "gala" to "Formal",
+        "graduation" to "Formal",
+        "interview" to "Business Casual",
+        "gym" to "Workout",
+        "workout" to "Workout",
+        "beach" to "Swim",
+        "pool" to "Swim",
+        "swimming" to "Swim",
+        "hike" to "Outdoor",
+        "hiking" to "Outdoor",
+        "pajama" to "Sleepwear",
+        "pajamas" to "Sleepwear",
+        "bed" to "Sleepwear"
     )
 
     private val COMPATIBLE_FAMILIES: Map<String, Set<String>> = mapOf(
@@ -81,10 +109,19 @@ object OutfitScorer {
 
         constraints.weather?.let { weather ->
             val warmthMismatch = abs(item.warmthLevel - WarmthLevels.idealFor(weather.temperature))
-            score += 10 - warmthMismatch * 4
-            // An item 3+ levels off (a heavy parka on a hot day) is never a reasonable "variety"
+            // Weather is the primary signal for a bare "Generate" with no occasion and nothing
+            // typed -- it should reliably reach for shorts on a hot day and avoid them on a cool
+            // one. The moment there's any guidance (an occasion chip, or typed text), this reverts
+            // to the original, softer weight, since weather is meant to defer to what was actually
+            // asked for -- an occasion alone (e.g. just tapping "Formal") must still be able to
+            // outrank an ordinary warmth mismatch, the same way a typed request does.
+            val genericRequest = constraints.occasion == null && constraints.userPrompt.isNullOrBlank()
+            val perLevelPenalty = if (genericRequest) GENERIC_WARMTH_PENALTY_PER_LEVEL else 4
+            val extremeThreshold = if (genericRequest) GENERIC_EXTREME_WARMTH_MISMATCH else EXTREME_WARMTH_MISMATCH
+            score += 10 - warmthMismatch * perLevelPenalty
+            // An item this far off (a heavy parka on a hot day) is never a reasonable "variety"
             // pick -- push it well outside the tie margin so other bonuses can't rescue it.
-            if (isExtremeWarmthMismatch(item, weather)) score -= EXTREME_WARMTH_PENALTY
+            if (warmthMismatch >= extremeThreshold) score -= EXTREME_WARMTH_PENALTY
             if (weather.condition.contains("rain", ignoreCase = true) && item.isWaterResistant) {
                 score += 15
             }
@@ -111,6 +148,41 @@ object OutfitScorer {
     }
 
     /**
+     * Drops items that shouldn't be handed back right now -- either because they're already
+     * committed to another day within the next few days (see
+     * [com.example.wardrobeapp.ui.outfit.OutfitViewModel]'s scheduling lookahead), or because
+     * they're in a category's recent-picks history (see [RecentPicksRepository]) and a fresher
+     * option exists. A small scoring penalty alone was too weak for either case -- a strong
+     * occasion/color match could easily outscore it -- so this is a real exclusion from the
+     * candidate pool, not just a nudge. Applied per-category: if excluding would leave a category
+     * with nothing at all (e.g. a 4-item Accessories wardrobe where all 4 are "recent"), that
+     * category's exclusion is skipped rather than forcing an impossible or oddly-empty outfit --
+     * the goal is variety when the wardrobe has slack, never blocking a suggestion when it doesn't.
+     */
+    fun excludeRecentlyUsedItems(items: List<ClothingItem>, excludedIds: Set<Long>): List<ClothingItem> {
+        if (excludedIds.isEmpty()) return items
+        return Category.ALL.flatMap { category ->
+            val inCategory = items.filter { it.category.equals(category, ignoreCase = true) }
+            val filtered = inCategory.filterNot { it.id in excludedIds }
+            filtered.ifEmpty { inCategory }
+        }
+    }
+
+    /**
+     * True when the wardrobe has an outerwear piece actually tagged for [occasion] -- used to
+     * include outerwear for formality (e.g. a blazer for a Formal occasion) even when
+     * temperature alone wouldn't call for a layer. Shared by [SimpleOutfitStrategy] and
+     * [WeatherAwareOutfitStrategy]; [AiOutfitStrategy] handles this itself via its prompt.
+     */
+    fun occasionMatchesOuterwear(items: List<ClothingItem>, occasion: String?): Boolean {
+        if (occasion == null) return false
+        return items.any {
+            it.category.equals(Category.OUTERWEAR, ignoreCase = true) &&
+                it.tags.any { tag -> tag.equals(occasion, ignoreCase = true) }
+        }
+    }
+
+    /**
      * Returns an accessory only when there's a genuine reason to include one -- a user-prompt
      * keyword match or an occasion-tag match -- rather than tacking a random accessory onto every
      * outfit. This is how a typed request like "gold chain" actually surfaces an Accessories item;
@@ -132,7 +204,11 @@ object OutfitScorer {
     /**
      * Lightweight, non-AI keyword matching between the user's free-text prompt and an item's
      * color/tags/name/brand, so the prompt has a real effect on the deterministic strategies too
-     * (not just when an on-device AI model is imported and enabled).
+     * (not just when the AI is enabled). Also checks [OCCASION_SYNONYMS] -- the app's own prompt
+     * placeholder suggests phrasings like "job interview" that never literally match a tag
+     * ("Business Casual"), which would otherwise leave an occasion-appropriate item with zero
+     * signal and a real chance of not surfacing at all, the same class of bug as items getting
+     * silently excluded by an over-eager filter.
      */
     private fun promptMatchBonus(item: ClothingItem, userPrompt: String?): Int {
         val words = userPrompt
@@ -149,8 +225,11 @@ object OutfitScorer {
             append(item.brand.lowercase()); append(' ')
             item.tags.forEach { append(it.lowercase()); append(' ') }
         }
-        val matches = words.count { haystack.contains(it) }
-        return matches * PROMPT_MATCH_BONUS
+        val directMatches = words.count { haystack.contains(it) }
+        val synonymMatches = words.count { word ->
+            OCCASION_SYNONYMS[word]?.let { impliedTag -> item.tags.any { it.equals(impliedTag, ignoreCase = true) } } == true
+        }
+        return (directMatches + synonymMatches) * PROMPT_MATCH_BONUS
     }
 
     /**

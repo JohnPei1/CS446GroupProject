@@ -1,7 +1,9 @@
 package com.example.wardrobeapp.ui.wardrobe
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -50,13 +52,32 @@ fun AddItemScreen(
         }
     }
 
+    var cameraError by remember { mutableStateOf<String?>(null) }
+
+    // The permission-request callback's isGranted can be stale (e.g. right after a fresh
+    // install/reinstall on this device, it reported granted when the OS had it revoked) --
+    // launching the camera without actually holding the permission throws a SecurityException
+    // that would otherwise crash the whole screen instead of just failing this one action.
+    fun launchCamera() {
+        try {
+            val uri = createImageFile(context)
+            imageUri = uri
+            cameraError = null
+            cameraLauncher.launch(uri)
+        } catch (e: SecurityException) {
+            cameraError = "Camera permission isn't actually granted. Enable it in your phone's " +
+                "Settings > Apps > Wardrobe > Permissions, then try again."
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            val uri = createImageFile(context)
-            imageUri = uri
-            cameraLauncher.launch(uri)
+            launchCamera()
+        } else {
+            cameraError = "Camera permission is needed to take a photo. Enable it in your " +
+                "phone's Settings > Apps > Wardrobe > Permissions."
         }
     }
 
@@ -120,7 +141,13 @@ fun AddItemScreen(
 
                 Button(
                     onClick = { //take photo
-                        permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA)
+                            == PackageManager.PERMISSION_GRANTED
+                        ) {
+                            launchCamera()
+                        } else {
+                            permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        }
                     },
                     modifier = Modifier.weight(1f)
                 ) {
@@ -154,6 +181,10 @@ fun AddItemScreen(
 
                     Text("Gallery")
                 }
+            }
+
+            cameraError?.let { message ->
+                Text(text = message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
             ClothingItemFormFields(formState)

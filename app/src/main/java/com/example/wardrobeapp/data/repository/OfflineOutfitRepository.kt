@@ -7,10 +7,10 @@ import com.example.wardrobeapp.data.local.entity.ClothingItemEntity
 import com.example.wardrobeapp.data.local.entity.OutfitEntity
 import com.example.wardrobeapp.data.local.entity.ScheduledOutfitEntity
 import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import java.util.Calendar
-import java.util.TimeZone
 
 class OfflineOutfitRepository(
     private val outfitDao: OutfitDao,
@@ -35,24 +35,46 @@ class OfflineOutfitRepository(
         outfitDao.insert(outfit.toEntity())
 
     override suspend fun deleteOutfit(outfit: Outfit) {
+        // If this is what's currently scheduled for today, deleting it should undo the "worn"
+        // mark that scheduling it applied -- otherwise items stay stuck showing as worn with no
+        // schedule left to explain it. Checked by identity (is this outfit today's plan?)
+        // before the plan row itself gets removed below.
+        val today = normalizeToUtcDay(System.currentTimeMillis())
+        val todaysOutfit = getScheduledOutfit(today)
+        if (todaysOutfit?.id == outfit.id && todaysOutfit.items.isNotEmpty()) {
+            clothingItemDao.unmarkWorn(todaysOutfit.items.map { it.id })
+        }
         outfitDao.delete(outfit.toEntity())
         // Don't leave dangling plans pointing at a deleted outfit.
         scheduledOutfitDao.deleteByOutfitId(outfit.id)
     }
 
+    // date/day parameters below are always already-resolved day-keys by the time they reach the
+    // repository (from a date picker, or a caller's own normalizeToUtcDay(System.currentTimeMillis())
+    // call) -- floor them, don't re-run local-time-zone interpretation, or a value that's already
+    // correct gets shifted a day backward. See domain.model.DateUtils for why.
+
     override suspend fun scheduleOutfit(outfitId: Long, date: Long) {
-        val day = normalizeDate(date)
+        val day = floorToUtcMidnight(date)
         // One outfit per day: replace whatever was planned.
         scheduledOutfitDao.deleteByDate(day)
         scheduledOutfitDao.insert(ScheduledOutfitEntity(outfitId = outfitId, date = day))
     }
 
     override suspend fun unscheduleDate(date: Long) {
-        scheduledOutfitDao.deleteByDate(normalizeDate(date))
+        val day = floorToUtcMidnight(date)
+        // Same reasoning as deleteOutfit: removing today's plan should undo the "worn" mark
+        // scheduling it for today applied, not just erase the plan and leave items stuck
+        // showing as worn with nothing left to explain it.
+        if (day == normalizeToUtcDay(System.currentTimeMillis())) {
+            val items = getScheduledOutfit(day)?.items.orEmpty()
+            if (items.isNotEmpty()) clothingItemDao.unmarkWorn(items.map { it.id })
+        }
+        scheduledOutfitDao.deleteByDate(day)
     }
 
     override suspend fun getScheduledOutfit(date: Long): Outfit? {
-        val scheduled = scheduledOutfitDao.getByDate(normalizeDate(date)) ?: return null
+        val scheduled = scheduledOutfitDao.getByDate(floorToUtcMidnight(date)) ?: return null
         val entity = outfitDao.getById(scheduled.outfitId) ?: return null
         val ids = entity.itemIds()
         val itemsById = clothingItemDao.getByIds(ids).associateBy { it.id }
@@ -73,15 +95,6 @@ class OfflineOutfitRepository(
         }
     }
 
-    private fun normalizeDate(timeInMillis: Long): Long {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        calendar.timeInMillis = timeInMillis
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
-    }
 }
 
 // Extension functions for mapping

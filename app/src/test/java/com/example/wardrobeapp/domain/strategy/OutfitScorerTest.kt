@@ -48,6 +48,29 @@ class OutfitScorerTest {
     }
 
     @Test
+    fun topCandidates_favorsOccasionMatchOverWarmthMismatchOnAnOrdinaryWarmDay() {
+        // Reproduces a real reported bug: AiOutfitStrategy used to hard-filter candidates by
+        // warmth mismatch before they were ever scored, which could silently drop the only
+        // occasion-appropriate item (formal pants for a funeral) while a warmth-matched but
+        // occasion-wrong one (shorts) survived -- resulting in an AI-generated funeral outfit in
+        // shorts. Now that filtering is gone, occasion match must reliably outrank an ordinary
+        // (non-extreme-weather) warmth mismatch in the ranking that AiOutfitStrategy relies on.
+        val formalPants = top(id = 1, tags = listOf("Formal"), warmthLevel = 4)
+        val casualShorts = top(id = 2, tags = listOf("Casual"), warmthLevel = 1)
+        val ranked = OutfitScorer.topCandidates(
+            items = listOf(casualShorts, formalPants),
+            category = Category.TOPS,
+            constraints = OutfitConstraints(
+                occasion = "Formal",
+                weather = WeatherInfo(temperature = 30.0, condition = "Sunny")
+            ),
+            alreadyPicked = emptyList(),
+            limit = 2
+        )
+        assertEquals(formalPants.id, ranked.first().id)
+    }
+
+    @Test
     fun topCandidates_ranksWarmerItemAboveLighterItemInColdWeather() {
         val light = top(id = 1, warmthLevel = 1)
         val heavy = top(id = 2, warmthLevel = 5)
@@ -59,6 +82,36 @@ class OutfitScorerTest {
             limit = 2
         )
         assertEquals(heavy.id, ranked.first().id)
+    }
+
+    @Test
+    fun score_stronglyFavorsShortsOnAHotDayWithNoGuidanceAtAll() {
+        // Reproduces the reported bug directly: a completely bare Generate tap (no occasion, no
+        // typed request) was recommending shorts on a cool day and not on a hot one -- the old
+        // weight only netted a few points either way, easily lost to other scoring factors.
+        val shorts = top(id = 1, warmthLevel = 1)
+        val heavierPants = top(id = 2, warmthLevel = 3)
+        val hotDay = OutfitConstraints(weather = WeatherInfo(temperature = 32.0, condition = "Sunny"))
+        assertTrue(OutfitScorer.score(shorts, hotDay, emptyList()) > OutfitScorer.score(heavierPants, hotDay, emptyList()) + 20)
+    }
+
+    @Test
+    fun score_stronglyAvoidsShortsOnACoolDayWithNoGuidanceAtAll() {
+        val shorts = top(id = 1, warmthLevel = 1)
+        val heavierPants = top(id = 2, warmthLevel = 3)
+        val coolDay = OutfitConstraints(weather = WeatherInfo(temperature = 15.0, condition = "Cloudy"))
+        assertTrue(OutfitScorer.score(heavierPants, coolDay, emptyList()) > OutfitScorer.score(shorts, coolDay, emptyList()) + 20)
+    }
+
+    @Test
+    fun score_occasionAloneStillUsesTheSofterWeatherWeight() {
+        // An occasion chip with no typed text must still count as "guidance", not "no guidance"
+        // -- otherwise this reintroduces the earlier fixed bug where a Formal occasion lost to
+        // weather-matched shorts. Mirrors topCandidates_favorsOccasionMatchOverWarmthMismatch...
+        val formalPants = top(id = 1, tags = listOf("Formal"), warmthLevel = 4)
+        val casualShorts = top(id = 2, tags = listOf("Casual"), warmthLevel = 1)
+        val hotDay = OutfitConstraints(occasion = "Formal", weather = WeatherInfo(temperature = 30.0, condition = "Sunny"))
+        assertTrue(OutfitScorer.score(formalPants, hotDay, emptyList()) > OutfitScorer.score(casualShorts, hotDay, emptyList()))
     }
 
     @Test
@@ -173,6 +226,89 @@ class OutfitScorerTest {
     @Test
     fun buildNote_isNeverBlank() {
         assertTrue(OutfitScorer.buildNote(OutfitConstraints()).isNotBlank())
+    }
+
+    @Test
+    fun excludeRecentlyUsedItems_dropsExcludedIdsWhenAlternativesExist() {
+        val scheduledTop = top(id = 1)
+        val freeTop = top(id = 2)
+        val filtered = OutfitScorer.excludeRecentlyUsedItems(listOf(scheduledTop, freeTop), excludedIds = setOf(1L))
+        assertEquals(listOf(freeTop.id), filtered.map { it.id })
+    }
+
+    @Test
+    fun excludeRecentlyUsedItems_fallsBackPerCategoryWhenExclusionWouldEmptyIt() {
+        // Only one top exists and it's excluded -- excluding it would make generation
+        // impossible, so it's kept despite being "recently used".
+        val onlyTop = top(id = 1)
+        val freeBottom = ClothingItem(id = 2, name = "Bottom", category = Category.BOTTOMS, imagePath = "")
+        val scheduledBottom = ClothingItem(id = 3, name = "Bottom 2", category = Category.BOTTOMS, imagePath = "")
+        val filtered = OutfitScorer.excludeRecentlyUsedItems(
+            listOf(onlyTop, freeBottom, scheduledBottom),
+            excludedIds = setOf(1L, 3L)
+        )
+        assertTrue(filtered.any { it.id == 1L }) // kept: excluding it would empty Tops entirely
+        assertEquals(listOf(2L), filtered.filter { it.category == Category.BOTTOMS }.map { it.id }) // dropped: an alternative exists
+    }
+
+    @Test
+    fun excludeRecentlyUsedItems_returnsWardrobeUnchangedWithNoExclusions() {
+        val wardrobe = listOf(top(id = 1), top(id = 2))
+        assertEquals(wardrobe, OutfitScorer.excludeRecentlyUsedItems(wardrobe, emptySet()))
+    }
+
+    @Test
+    fun excludeRecentlyUsedItems_neverEmptiesASmallCategoryEvenWhenFullySaturated() {
+        // Reproduces the reported scenario: a 4-item Accessories wardrobe where all 4 have
+        // cycled through the recent-picks history -- must never block suggestions entirely.
+        val accessories = (1L..4L).map {
+            ClothingItem(id = it, name = "Accessory $it", category = Category.ACCESSORIES, imagePath = "")
+        }
+        val filtered = OutfitScorer.excludeRecentlyUsedItems(accessories, excludedIds = setOf(1L, 2L, 3L, 4L))
+        assertEquals(4, filtered.size)
+    }
+
+    @Test
+    fun occasionMatchesOuterwear_trueWhenTagged() {
+        val blazer = top(id = 1, tags = listOf("Formal")).copy(category = Category.OUTERWEAR)
+        assertTrue(OutfitScorer.occasionMatchesOuterwear(listOf(blazer), "Formal"))
+    }
+
+    @Test
+    fun occasionMatchesOuterwear_falseWhenNoMatchingOuterwear() {
+        val windbreaker = top(id = 1, tags = listOf("Outdoor")).copy(category = Category.OUTERWEAR)
+        assertTrue(!OutfitScorer.occasionMatchesOuterwear(listOf(windbreaker), "Formal"))
+    }
+
+    @Test
+    fun occasionMatchesOuterwear_falseWithoutAnOccasion() {
+        val blazer = top(id = 1, tags = listOf("Formal")).copy(category = Category.OUTERWEAR)
+        assertTrue(!OutfitScorer.occasionMatchesOuterwear(listOf(blazer), null))
+    }
+
+    @Test
+    fun pickBest_matchesOccasionSynonymInFreeTextPrompt() {
+        // The app's own prompt placeholder suggests "job interview" as an example -- "interview"
+        // never literally matches a "Business Casual" tag, so without synonym awareness this
+        // item would get zero signal and could easily lose to an unrelated casual item.
+        val casual = top(id = 1, tags = listOf("Casual"))
+        val businessCasual = top(id = 2, tags = listOf("Business Casual"))
+        val constraints = OutfitConstraints(userPrompt = "dressing for a job interview")
+        repeat(20) {
+            val picked = OutfitScorer.pickBest(listOf(casual, businessCasual), Category.TOPS, constraints, emptyList())
+            assertEquals(businessCasual.id, picked?.id)
+        }
+    }
+
+    @Test
+    fun pickBest_matchesFuneralSynonymToFormal() {
+        val casual = top(id = 1, tags = listOf("Casual"))
+        val formal = top(id = 2, tags = listOf("Formal"))
+        val constraints = OutfitConstraints(userPrompt = "my most formal outfit for a funeral")
+        repeat(20) {
+            val picked = OutfitScorer.pickBest(listOf(casual, formal), Category.TOPS, constraints, emptyList())
+            assertEquals(formal.id, picked?.id)
+        }
     }
 
     private fun accessory(

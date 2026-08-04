@@ -8,6 +8,8 @@ import com.example.wardrobeapp.WardrobeApplication
 import com.example.wardrobeapp.data.repository.OutfitRepository
 import com.example.wardrobeapp.data.repository.WardrobeRepository
 import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,9 +62,10 @@ class MyOutfitsViewModel(
      * Plans [outfit] for [date]. If that day already has a different outfit, the request is
      * parked in [MyOutfitsUiState.pendingSchedule] for the user to confirm the replacement.
      */
+    /** [date] must already be a resolved day-key -- this only floors it. */
     fun requestWear(outfit: Outfit, date: Long) {
         viewModelScope.launch {
-            val day = normalizeToUtcDay(date)
+            val day = floorToUtcMidnight(date)
             val existing = runCatching { outfitRepository.getScheduledOutfit(day) }.getOrNull()
             if (existing != null && existing.id != outfit.id) {
                 pendingOutfit = outfit
@@ -110,7 +113,7 @@ class MyOutfitsViewModel(
 
     fun removeTodayPlan() {
         viewModelScope.launch {
-            runCatching { outfitRepository.unscheduleDate(System.currentTimeMillis()) }
+            runCatching { outfitRepository.unscheduleDate(normalizeToUtcDay(System.currentTimeMillis())) }
                 .onSuccess { _uiState.update { it.copy(userMessage = "Removed today's plan.") } }
                 .onFailure { _uiState.update { it.copy(userMessage = "Couldn't remove today's plan.") } }
         }

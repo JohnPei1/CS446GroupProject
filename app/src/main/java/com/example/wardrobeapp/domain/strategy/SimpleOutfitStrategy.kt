@@ -27,6 +27,12 @@ class SimpleOutfitStrategy : OutfitStrategy {
         if (missing.isNotEmpty()) throw IncompleteOutfitException(missing)
 
         OutfitScorer.pickBest(items, Category.FOOTWEAR, constraints, selected)?.let { selected.add(it) }
+        // This strategy is weather-unaware by design, but outerwear can still matter purely for
+        // formality (e.g. a blazer for a Formal occasion) -- it was never considered here at all
+        // before, so a Formal request with weather-aware off could never get one.
+        if (OutfitScorer.occasionMatchesOuterwear(items, constraints.occasion)) {
+            OutfitScorer.pickBest(items, Category.OUTERWEAR, constraints, selected)?.let { selected.add(it) }
+        }
         OutfitScorer.matchedAccessory(items, constraints)?.let { selected.add(it) }
 
         return Outfit(name = "Everyday Outfit", items = selected, note = OutfitScorer.buildNote(constraints))

@@ -21,6 +21,12 @@ data class OutfitUiState(
     val scheduledFor: Long? = null,
     /** Set when scheduling needs the user to confirm replacing an existing day plan. */
     val pendingSchedule: PendingSchedule? = null,
+    /**
+     * True when saving (without scheduling) needs a name from the user first -- a generated
+     * outfit only has a generic strategy name ("AI Pick", "Everyday Outfit") until it's either
+     * scheduled (named after that date) or saved on its own (named by the user here).
+     */
+    val promptForSaveName: Boolean = false,
     /** One-shot feedback message to show in a snackbar; cleared via consumeMessage(). */
     val userMessage: String? = null
 )

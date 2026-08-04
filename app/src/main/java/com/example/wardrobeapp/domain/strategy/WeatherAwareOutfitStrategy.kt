@@ -29,7 +29,15 @@ class WeatherAwareOutfitStrategy : OutfitStrategy {
         if (missing.isNotEmpty()) throw IncompleteOutfitException(missing)
 
         OutfitScorer.pickBest(items, Category.FOOTWEAR, constraints, selected)?.let { selected.add(it) }
-        if (temperature != null && temperature <= COLD_THRESHOLD_CELSIUS) {
+        // Outerwear also serves formality, not just warmth -- e.g. a blazer for a funeral is
+        // still correct at 20°C. Gating this purely on temperature meant a Formal request in
+        // anything but genuinely cold weather never got outerwear at all, even when the wardrobe
+        // had a piece tagged exactly for that occasion. Mirrors AiOutfitStrategy's equivalent
+        // fix; this deterministic path needs it too since it's what a failed/disabled AI call
+        // silently falls back to.
+        val includeForWarmth = temperature != null && temperature <= COLD_THRESHOLD_CELSIUS
+        val includeForOccasion = OutfitScorer.occasionMatchesOuterwear(items, constraints.occasion)
+        if (includeForWarmth || includeForOccasion) {
             OutfitScorer.pickBest(items, Category.OUTERWEAR, constraints, selected)?.let { selected.add(it) }
         }
         OutfitScorer.matchedAccessory(items, constraints)?.let { selected.add(it) }

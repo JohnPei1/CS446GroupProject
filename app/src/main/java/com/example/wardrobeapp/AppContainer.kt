@@ -7,7 +7,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.wardrobeapp.data.local.AppDatabase
-import com.example.wardrobeapp.data.local.ai.LlmModelManager
+import com.example.wardrobeapp.data.remote.ai.AiClient
+import com.example.wardrobeapp.data.remote.ai.GeminiAiClient
 import com.example.wardrobeapp.data.repository.*
 import com.example.wardrobeapp.domain.model.SavedLocation
 import kotlinx.coroutines.flow.map
@@ -20,7 +21,8 @@ interface AppContainer {
     val outfitRepository: OutfitRepository
     val weatherRepository: WeatherRepository
     val settingsRepository: SettingsRepository
-    val llmModelManager: LlmModelManager
+    val recentPicksRepository: RecentPicksRepository
+    val aiClient: AiClient
 }
 
 /**
@@ -87,7 +89,11 @@ class AppDataContainer(private val context: Context) : AppContainer {
         }
     }
 
-    override val llmModelManager: LlmModelManager by lazy {
-        LlmModelManager(context.applicationContext)
+    override val recentPicksRepository: RecentPicksRepository by lazy {
+        OfflineRecentPicksRepository(context.applicationContext)
+    }
+
+    override val aiClient: AiClient by lazy {
+        GeminiAiClient()
     }
 }

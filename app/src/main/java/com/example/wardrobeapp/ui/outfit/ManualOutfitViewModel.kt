@@ -9,6 +9,8 @@ import com.example.wardrobeapp.data.repository.OutfitRepository
 import com.example.wardrobeapp.data.repository.WardrobeRepository
 import com.example.wardrobeapp.domain.model.ClothingItem
 import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import com.example.wardrobeapp.domain.strategy.Category
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,10 +62,11 @@ class ManualOutfitViewModel(
      * If that day already has an outfit, the request is parked in
      * [ManualOutfitUiState.pendingSchedule] for the user to confirm the replacement.
      */
+    /** [date] must already be a resolved day-key -- this only floors it. */
     fun requestSchedule(date: Long) {
         if (buildValidatedOutfit() == null) return
         viewModelScope.launch {
-            val day = normalizeToUtcDay(date)
+            val day = floorToUtcMidnight(date)
             val existing = runCatching { outfitRepository.getScheduledOutfit(day) }.getOrNull()
             if (existing != null) {
                 _uiState.value = _uiState.value.copy(

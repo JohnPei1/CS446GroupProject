@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.wardrobeapp.domain.model.Outfit
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -88,7 +89,7 @@ fun MyOutfitsScreen(
             outfitName = outfit.name,
             onWearToday = {
                 wearTarget = null
-                viewModel.requestWear(outfit, System.currentTimeMillis())
+                viewModel.requestWear(outfit, normalizeToUtcDay(System.currentTimeMillis()))
             },
             onPickDate = {
                 wearTarget = null

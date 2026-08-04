@@ -8,7 +8,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.wardrobeapp.data.local.ai.LlmModelManager
+import com.example.wardrobeapp.data.remote.ai.AiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,11 +31,10 @@ private object PrefKeys {
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val weatherRepository: WeatherRepository,
-    private val llmModelManager: LlmModelManager,
+    private val aiClient: AiClient,
     private val context: Context
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SettingsUiState(isLoading = true))
-        private val _isAiModelAvailable = MutableStateFlow(llmModelManager.isModelAvailable())
 
         val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
@@ -53,23 +52,21 @@ class SettingsViewModel(
             val locationFlow = settingsRepository.savedLocation
                 .map { it?.name ?: "" }
 
-            combine(darkModeFlow, unitFlow, locationFlow, settingsRepository.isAiEnabled, _isAiModelAvailable) {
-                dark, unit, loc, aiEnabled, aiModelAvailable ->
+            combine(darkModeFlow, unitFlow, locationFlow, settingsRepository.isAiEnabled) {
+                dark, unit, loc, aiEnabled ->
                 SettingsUiState(
                     isDarkMode = dark,
                     unitSystem = unit,
                     location = loc,
                     isAiEnabled = aiEnabled,
-                    isAiModelAvailable = aiModelAvailable,
                     isLoading = false
                 )
             }.collect { computed ->
-                // Preserve transient state (AI download progress/error, location search status),
-                // which isn't part of the persisted settings this combine tracks -- a plain
-                // replace here would wipe it out on every unrelated DataStore write.
+                // Preserve transient state (AI error, location search status), which isn't part
+                // of the persisted settings this combine tracks -- a plain replace here would
+                // wipe it out on every unrelated DataStore write.
                 _uiState.update { current ->
                     computed.copy(
-                        aiDownloadProgress = current.aiDownloadProgress,
                         aiError = current.aiError,
                         isResolvingLocation = current.isResolvingLocation,
                         locationStatus = current.locationStatus
@@ -80,42 +77,19 @@ class SettingsViewModel(
     }
 
     /**
-     * One-button opt-in: turning AI on downloads the (free, ungated) model automatically if it
-     * isn't already present, then enables it. Turning it off just disables it -- the downloaded
-     * model stays cached so re-enabling later is instant.
+     * A plain opt-in toggle now that AI is a cloud call with nothing to download -- just
+     * persists the flag, after checking a provider key is actually configured for this build so
+     * turning it on doesn't silently do nothing.
      */
     fun onAiEnabledToggled(enabled: Boolean) {
-        if (enabled && !llmModelManager.isModelAvailable()) {
-            downloadAiModelThenEnable()
+        if (enabled && !aiClient.isConfigured()) {
+            _uiState.update { it.copy(aiError = "AI isn't configured for this build (missing API key).") }
             return
         }
         viewModelScope.launch {
             runCatching { settingsRepository.setAiEnabled(enabled) }
                 .onFailure { setError("Couldn't save AI setting") }
         }
-    }
-
-    private fun downloadAiModelThenEnable() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(aiDownloadProgress = 0f, aiError = null) }
-            llmModelManager.downloadModel { downloaded, total ->
-                val fraction = if (total > 0) downloaded.toFloat() / total.toFloat() else 0f
-                _uiState.update { it.copy(aiDownloadProgress = fraction) }
-            }.onSuccess {
-                _isAiModelAvailable.value = true
-                _uiState.update { it.copy(aiDownloadProgress = null) }
-                runCatching { settingsRepository.setAiEnabled(true) }
-                    .onFailure { setError("Couldn't save AI setting") }
-            }.onFailure { e ->
-                _uiState.update { it.copy(aiDownloadProgress = null, aiError = e.message ?: "Couldn't download the AI model") }
-            }
-        }
-    }
-
-    fun deleteAiModel() {
-        llmModelManager.deleteModel()
-        _isAiModelAvailable.value = false
-        onAiEnabledToggled(false)
     }
 
     fun clearAiError() {
@@ -202,7 +176,7 @@ class SettingsViewModel(
                         return SettingsViewModel(
                             settingsRepository = container.settingsRepository,
                             weatherRepository = container.weatherRepository,
-                            llmModelManager = container.llmModelManager,
+                            aiClient = container.aiClient,
                             context = context.applicationContext
                         ) as T
                 }

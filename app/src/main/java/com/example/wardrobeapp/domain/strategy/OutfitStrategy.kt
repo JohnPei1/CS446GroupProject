@@ -18,6 +18,7 @@ object Category {
     const val FOOTWEAR = "Footwear"
     const val OUTERWEAR = "Outerwear"
     const val ACCESSORIES = "Accessories"
+    val ALL = listOf(TOPS, BOTTOMS, FOOTWEAR, OUTERWEAR, ACCESSORIES)
 }
 
 /**

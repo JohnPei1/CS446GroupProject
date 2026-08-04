@@ -8,14 +8,14 @@ import com.example.wardrobeapp.WardrobeApplication
 import com.example.wardrobeapp.data.repository.OutfitRepository
 import com.example.wardrobeapp.data.repository.SettingsRepository
 import com.example.wardrobeapp.data.repository.WeatherRepository
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.Calendar
-import java.util.TimeZone
 
 class CalendarViewModel(
     private val outfitRepository: OutfitRepository,
@@ -23,7 +23,7 @@ class CalendarViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
-        CalendarUiState(selectedDate = normalizeDate(System.currentTimeMillis()))
+        CalendarUiState(selectedDate = normalizeToUtcDay(System.currentTimeMillis()))
     )
     val uiState: StateFlow<CalendarUiState> = _uiState.asStateFlow()
 
@@ -58,18 +58,11 @@ class CalendarViewModel(
         }
     }
 
+    // date is already UTC midnight of the visually-picked date (Compose DatePicker's own
+    // convention) -- floor it, don't re-run local-time-zone interpretation, or it shifts a day
+    // backward for EST/EDT. This was a real, reported bug.
     fun onDateSelected(date: Long) {
-        _uiState.update { it.copy(selectedDate = normalizeDate(date)) }
-    }
-
-    private fun normalizeDate(timeInMillis: Long): Long {
-        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-        calendar.timeInMillis = timeInMillis
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
+        _uiState.update { it.copy(selectedDate = floorToUtcMidnight(date)) }
     }
 
     companion object {

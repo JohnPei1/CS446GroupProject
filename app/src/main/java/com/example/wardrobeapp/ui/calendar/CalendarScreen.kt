@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.WeatherInfo
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import com.example.wardrobeapp.ui.outfit.OutfitItemRow
 import java.text.SimpleDateFormat
 import java.util.*
@@ -118,7 +120,9 @@ fun SelectedDateDetails(
     onGenerateOutfit: () -> Unit,
     onSelectOutfit: () -> Unit
 ) {
-    val isPlannable = normalizeDate(date) >= normalizeDate(System.currentTimeMillis())
+    // date is always an already-resolved day-key by the time it reaches here (from
+    // CalendarViewModel.selectedDate) -- floor it, don't re-run local-time-zone interpretation.
+    val isPlannable = floorToUtcMidnight(date) >= normalizeToUtcDay(System.currentTimeMillis())
 
     Column(modifier = Modifier.padding(vertical = 12.dp)) {
         Text(
@@ -179,12 +183,3 @@ fun formatDateLong(date: Long): String {
     return sdf.format(Date(date))
 }
 
-private fun normalizeDate(timeInMillis: Long): Long {
-    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-    calendar.timeInMillis = timeInMillis
-    calendar.set(Calendar.HOUR_OF_DAY, 0)
-    calendar.set(Calendar.MINUTE, 0)
-    calendar.set(Calendar.SECOND, 0)
-    calendar.set(Calendar.MILLISECOND, 0)
-    return calendar.timeInMillis
-}

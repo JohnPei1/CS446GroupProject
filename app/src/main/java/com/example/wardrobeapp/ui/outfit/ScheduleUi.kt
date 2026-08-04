@@ -19,8 +19,9 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.wardrobeapp.domain.model.floorToUtcMidnight
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -34,20 +35,14 @@ import java.util.TimeZone
 /** A schedule request paused because [date] already has an outfit; confirmed by the user. */
 data class PendingSchedule(val date: Long, val existingOutfitName: String)
 
-/** All plan dates are stored as UTC midnight so days compare exactly. */
-fun normalizeToUtcDay(timeInMillis: Long): Long {
-    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-    calendar.timeInMillis = timeInMillis
-    calendar.set(Calendar.HOUR_OF_DAY, 0)
-    calendar.set(Calendar.MINUTE, 0)
-    calendar.set(Calendar.SECOND, 0)
-    calendar.set(Calendar.MILLISECOND, 0)
-    return calendar.timeInMillis
-}
-
-/** "today" for the current day, otherwise e.g. "August 4". */
+/**
+ * "today" for the current day, otherwise e.g. "August 4". [date] is always an already-resolved
+ * day-key by the time it reaches here (from a date picker or a stored schedule), so this floors
+ * it rather than re-running local-time-zone interpretation -- see [floorToUtcMidnight]'s doc for
+ * why doing the latter here was a real, reported bug (a picked "August 8" displaying as "August 7").
+ */
 fun planDateLabel(date: Long): String {
-    val day = normalizeToUtcDay(date)
+    val day = floorToUtcMidnight(date)
     if (day == normalizeToUtcDay(System.currentTimeMillis())) return "today"
     val sdf = SimpleDateFormat("MMMM d", Locale.getDefault())
     sdf.timeZone = TimeZone.getTimeZone("UTC")
@@ -104,7 +99,10 @@ fun PlanDatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(
-                onClick = { state.selectedDateMillis?.let { onPick(normalizeToUtcDay(it)) } },
+                // selectedDateMillis is already UTC midnight of the visually-picked date (Compose's
+                // own convention) -- floor, don't re-run local-time-zone interpretation on it, or
+                // it shifts a day backward for EST/EDT (see floorToUtcMidnight's doc).
+                onClick = { state.selectedDateMillis?.let { onPick(floorToUtcMidnight(it)) } },
                 enabled = state.selectedDateMillis != null
             ) { Text("Plan") }
         },

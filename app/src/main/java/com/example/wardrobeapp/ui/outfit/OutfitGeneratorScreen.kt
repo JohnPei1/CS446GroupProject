@@ -1,5 +1,6 @@
 package com.example.wardrobeapp.ui.outfit
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,8 @@ import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wardrobeapp.domain.model.Outfit
 import com.example.wardrobeapp.domain.model.TagOptions
+import com.example.wardrobeapp.domain.model.normalizeToUtcDay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,6 +82,7 @@ fun OutfitGeneratorScreen(
     )
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var weatherAware by remember { mutableStateOf(true) }
     var selectedOccasion by remember { mutableStateOf<String?>(null) }
     var userPrompt by remember { mutableStateOf("") }
@@ -105,7 +110,7 @@ fun OutfitGeneratorScreen(
             outfitName = uiState.generatedOutfit?.name ?: "Outfit",
             onWearToday = {
                 showWearOptions = false
-                viewModel.requestSchedule(System.currentTimeMillis())
+                viewModel.requestSchedule(normalizeToUtcDay(System.currentTimeMillis()))
             },
             onPickDate = {
                 showWearOptions = false
@@ -128,6 +133,12 @@ fun OutfitGeneratorScreen(
             pending = pending,
             onConfirm = viewModel::confirmPendingSchedule,
             onDismiss = viewModel::dismissPendingSchedule
+        )
+    }
+    if (uiState.promptForSaveName) {
+        SaveNameDialog(
+            onConfirm = viewModel::confirmSaveName,
+            onDismiss = viewModel::dismissSaveNamePrompt
         )
     }
 
@@ -291,6 +302,25 @@ fun OutfitGeneratorScreen(
                         Spacer(Modifier.width(8.dp))
                         Text(if (uiState.saved) "Saved" else "Save")
                     }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.exportOutfitImage(context) { uri ->
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/png"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, "Share outfit"))
+                            }
+                        },
+                        enabled = !uiState.isLoading,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Share")
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 Button(
@@ -321,6 +351,38 @@ fun OutfitGeneratorScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
+}
+
+/** Asks for a name before saving an outfit that isn't being scheduled (so has no date to fall
+ *  back to as its name) -- see [OutfitViewModel.save]. */
+@Composable
+private fun SaveNameDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Name this outfit") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Outfit name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name) },
+                enabled = name.isNotBlank()
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
